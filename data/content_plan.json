@@ -1,0 +1,97 @@
+[
+  {
+    "slot_id": "slot_1",
+    "date": "2026-05-11",
+    "time": "20:00",
+    "platform": "Telegram",
+    "format": "история",
+    "trend": {
+      "id": 41,
+      "source": "маркетинг",
+      "topic": "How to Build a Personal Brand (Full Course)",
+      "keywords": "[\"personal brand\", \"brand personal\", \"brand strategy\", \"standard engagement\", \"personal growth\", \"profitable personal\", \"long-form engagement\", \"format standard\"]",
+      "posts_count": 51,
+      "summary": "Тема 'How to Build a Personal Brand (Full Cour...' — 51 постов, ключевые слова: personal brand, brand personal, brand strategy, standard engagement",
+      "collected_at": "2026-05-06 06:14:18",
+      "expires_at": "2026-05-20T12:14:18.392811"
+    },
+    "post_idea": "История: как ML инженер использует [, \" для «Стать экспертом в нише»",
+    "status": "planned"
+  },
+  {
+    "slot_id": "slot_2",
+    "date": "2026-05-13",
+    "time": "09:00",
+    "platform": "Telegram",
+    "format": "история",
+    "trend": {
+      "id": 47,
+      "source": "маркетинг",
+      "topic": "How to Build a Personal Brand (Full Course)",
+      "keywords": "[\"personal brand\", \"brand personal\", \"social media\", \"personal growth\", \"personal\", \"profitable personal\", \"personal development\", \"mindset personal\"]",
+      "posts_count": 48,
+      "summary": "Тема 'How to Build a Personal Brand (Full Cour...' — 48 постов, ключевые слова: personal brand, brand personal, social media, personal growth",
+      "collected_at": "2026-05-06 06:24:57",
+      "expires_at": "2026-05-20T12:24:57.343881"
+    },
+    "post_idea": "История: как ML инженер использует [, \" для «Стать экспертом в нише»",
+    "status": "planned"
+  },
+  {
+    "slot_id": "slot_3",
+    "date": "2026-05-15",
+    "time": "13:00",
+    "platform": "Telegram",
+    "format": "история",
+    "trend": {
+      "id": 50,
+      "source": "маркетинг",
+      "topic": "The 8 Trends I’m Betting My Entire Marketing Strategy On in 2026",
+      "keywords": "[\"marketing career\", \"marketing marketing\", \"digital marketing\", \"marketing jobs\", \"marketing\", \"marketing format\", \"career career\", \"career path\"]",
+      "posts_count": 43,
+      "summary": "Тема 'The 8 Trends I’m Betting My Entire Marke...' — 43 постов, ключевые слова: marketing career, marketing marketing, digital marketing, marketing jobs",
+      "collected_at": "2026-05-06 06:24:58",
+      "expires_at": "2026-05-20T12:24:58.053876"
+    },
+    "post_idea": "История: как ML инженер использует [, \" для «Стать экспертом в нише»",
+    "status": "planned"
+  },
+  {
+    "slot_id": "slot_4",
+    "date": "2026-05-18",
+    "time": "09:00",
+    "platform": "Telegram",
+    "format": "история",
+    "trend": {
+      "id": 40,
+      "source": "маркетинг",
+      "topic": "How I Would Learn Digital Marketing (If I Could Start Over)",
+      "keywords": "[\"digital marketing\", \"marketing career\", \"marketing marketing\", \"marketing digital\", \"marketing\", \"career digital\", \"career path\", \"marketing jobs\"]",
+      "posts_count": 41,
+      "summary": "Тема 'How I Would Learn Digital Marketing (If ...' — 41 постов, ключевые слова: digital marketing, marketing career, marketing marketing, marketing digital",
+      "collected_at": "2026-05-06 06:14:17",
+      "expires_at": "2026-05-20T12:14:17.956855"
+    },
+    "post_idea": "История: как ML инженер использует [, \" для «Стать экспертом в нише»",
+    "status": "planned"
+  },
+  {
+    "slot_id": "slot_5",
+    "date": "2026-05-20",
+    "time": "20:00",
+    "platform": "Telegram",
+    "format": "история",
+    "trend": {
+      "id": 70,
+      "source": "it",
+      "topic": "How to Be So Productive it Feels ILLEGAL",
+      "keywords": "[\"standard engagement\", \"format standard\", \"long-form engagement\", \"work format\", \"career advice\", \"format long-form\", \"personal branding\", \"andrew huberman\"]",
+      "posts_count": 40,
+      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 40 постов, ключевые слова: standard engagement, format standard, long-form engagement, work format",
+      "collected_at": "2026-05-09 10:38:53",
+      "expires_at": "2026-05-23T16:38:53.655916"
+    },
+    "post_idea": "История: как ML инженер использует [, \" для «Стать экспертом в нише»",
+    "status": "planned"
+  }
+]

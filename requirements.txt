@@ -1,0 +1,11 @@
+praw==7.7.1
+feedparser==6.0.11
+duckduckgo-search==6.1.7
+yake==0.4.8
+sumy==0.11.0
+scikit-learn==1.4.2
+nltk==3.8.1
+requests==2.31.0
+python-dotenv==1.0.1
+schedule==1.2.1
+colorama==0.4.6

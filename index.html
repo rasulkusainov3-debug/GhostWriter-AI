@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Управление</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; padding-top: 50px; background: #f4f7f6; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; }
+        button { background: #0088cc; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 8px; cursor: pointer; }
+        #status { margin-top: 20px; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🤖 Генератор обложек</h2>
+        <button onclick="run()">ЗАПУСТИТЬ ОБРАБОТКУ</button>
+        <div id="status">Нажми на кнопку выше</div>
+    </div>
+    <script>
+        async function run() {
+            document.getElementById('status').innerText = '⏳ Процесс идет... Проверяй консоль!';
+            try {
+                const r = await fetch('http://127.0.0.1:8000/api/beautify', { method: 'POST' });
+                const res = await r.json();
+                if (res.ok) {
+                    document.getElementById('status').innerText = '✅ Успех! Картинки скачаны.';
+                    alert('Готово!');
+                } else {
+                    document.getElementById('status').innerText = '❌ Ошибка: ' + res.error;
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = '❌ Ошибка сети. Проверь консоль Python.';
+            }
+        }
+    </script>
+</body>
+</html>
