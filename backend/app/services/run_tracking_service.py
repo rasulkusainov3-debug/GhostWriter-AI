@@ -1,10 +1,25 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import execute, fetch_one
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (UUID, datetime, date, Decimal)):
+        return str(value)
+    return value
 
 
 async def start_trend_run(session: AsyncSession, user_id: str, profile_snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -15,7 +30,7 @@ async def start_trend_run(session: AsyncSession, user_id: str, profile_snapshot:
         VALUES (:user_id, 'running', CAST(:input_profile_snapshot AS JSONB))
         RETURNING *
         """,
-        {"user_id": user_id, "input_profile_snapshot": profile_snapshot or {}},
+        {"user_id": user_id, "input_profile_snapshot": _json_safe(profile_snapshot or {})},
     ) or {}
 
 
@@ -41,7 +56,7 @@ async def finish_trend_run(
         """,
         {
             "id": run_id,
-            "queries_used": queries_used,
+            "queries_used": _json_safe(queries_used),
             "raw_posts_found": raw_posts_found,
             "trends_found": trends_found,
         },
@@ -71,7 +86,7 @@ async def fail_trend_run(
         """,
         {
             "id": run_id,
-            "queries_used": queries_used or [],
+            "queries_used": _json_safe(queries_used or []),
             "raw_posts_found": raw_posts_found,
             "trends_found": trends_found,
             "error_message": error_message[:1000],
@@ -105,8 +120,8 @@ async def save_generation_run(
             "run_type": run_type,
             "provider": provider,
             "agent_name": agent_name,
-            "input_payload": input_payload or {},
-            "output_payload": output_payload or {},
+            "input_payload": _json_safe(input_payload or {}),
+            "output_payload": _json_safe(output_payload or {}),
             "status": status,
             "error_message": error_message[:1000] if error_message else None,
         },

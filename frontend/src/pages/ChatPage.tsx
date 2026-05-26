@@ -162,6 +162,8 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [progressSteps, setProgressSteps] = useState<ChatStep[]>([]);
   const [progressTick, setProgressTick] = useState(0);
+  const [processingKey, setProcessingKey] = useState('answer');
+  const [longWaitLevel, setLongWaitLevel] = useState(0);
   const [selectedPost, setSelectedPost] = useState<GeneratedPostCard | null>(null);
   const [postDraft, setPostDraft] = useState({ draft_text: '', final_text: '', status: 'draft' });
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -367,15 +369,25 @@ export default function ChatPage() {
     const outgoing = overrideText || text;
     if (!outgoing.trim()) return;
     const optimistic = getOptimisticSteps(outgoing);
+    const nextProcessingKey = getProcessingKey(outgoing);
     let tick = 0;
     setSending(true);
     setProgressTick(0);
+    setProcessingKey(nextProcessingKey);
+    setLongWaitLevel(0);
     setProgressSteps(optimistic);
+    const slowTimer = window.setTimeout(() => setLongWaitLevel(1), 8000);
+    const verySlowTimer = window.setTimeout(() => setLongWaitLevel(2), 20000);
     const timer = window.setInterval(() => {
       tick += 1;
       setProgressTick(tick);
-      setProgressSteps((steps) => steps.map((step, index) => ({ ...step, status: index < tick ? 'done' : index === tick ? 'active' : 'pending' })));
-      if (tick >= optimistic.length - 1) window.clearInterval(timer);
+      setProgressSteps((steps) => {
+        const activeIndex = Math.min(tick, Math.max(steps.length - 2, 0));
+        return steps.map((step, index) => ({
+          ...step,
+          status: index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending',
+        }));
+      });
     }, 650);
     try {
       const selectedPostContext = selectedPost
@@ -396,8 +408,11 @@ export default function ChatPage() {
       ]);
     } finally {
       window.clearInterval(timer);
+      window.clearTimeout(slowTimer);
+      window.clearTimeout(verySlowTimer);
       setSending(false);
       setProgressSteps([]);
+      setLongWaitLevel(0);
     }
   }
 
@@ -424,17 +439,44 @@ export default function ChatPage() {
     );
   }
 
+  function getProcessingKey(value: string) {
+    const lower = value.toLowerCase();
+    if (/(перегенер|передел|заново|короче|экспертнее|живее|человечно|regenerate|rewrite|shorter|expert|human|hook)/i.test(lower)) {
+      return 'regenerate';
+    }
+    if (/(тренд|актуальн.*тем|trend|topic|search|find)/i.test(lower)) {
+      return 'trends';
+    }
+    if (/(контент-план|контент план|план публикац|content plan|plan)/i.test(lower)) {
+      return 'plan';
+    }
+    if (/(пост|post|caption)/i.test(lower)) {
+      return 'post';
+    }
+    if (/(профил|аудитор|цель|тон|платформ|profile|audience|goal|tone|platform)/i.test(lower)) {
+      return 'profile';
+    }
+    return 'answer';
+  }
+
+  function processingText() {
+    const base = t(`chat.processing.${processingKey}`).replace(/\.+$/, '');
+    return `${base}${'.'.repeat((progressTick % 3) + 1)}`;
+  }
+
   function getOptimisticSteps(value: string): ChatStep[] {
     const lower = value.toLowerCase();
-    const actionSteps = lower.includes('тренд') || lower.includes('trend')
+    const actionSteps = /(тренд|актуальн.*тем|trend|topic|search|find)/i.test(lower)
       ? ['building_queries', 'searching_materials', 'checking_relevance', 'grouping_trends', 'cleaning_keywords', 'saving_result']
-      : lower.includes('план') || lower.includes('plan')
+      : /(контент-план|контент план|план публикац|plan)/i.test(lower)
         ? ['loading_trends', 'passing_to_planner', 'creating_content_plan', 'saving_content_plan']
-        : lower.includes('пост') || lower.includes('post')
-          ? ['generating_post', 'saving_result']
-          : lower.includes('тон') || lower.includes('profile') || lower.includes('профиль')
-            ? ['editing_profile', 'saving_result']
-            : ['generating_response'];
+        : /(перегенер|передел|заново|короче|экспертнее|живее|regenerate|rewrite|shorter|expert|human|hook)/i.test(lower)
+          ? ['regenerating_post', 'saving_result']
+          : /(пост|post|caption)/i.test(lower)
+            ? ['generating_post', 'saving_result']
+            : /(тон|профил|аудитор|цель|платформ|profile|audience|goal|tone|platform)/i.test(lower)
+              ? ['editing_profile', 'saving_result']
+              : ['generating_response'];
     return ['analyzing_request', 'loading_profile', ...actionSteps, 'done'].map((key, index) => ({
       key,
       status: index === 0 ? 'active' : 'pending',
@@ -761,7 +803,7 @@ export default function ChatPage() {
                 {visualAssets.map((asset) => (
                   <button key={asset.id} className={`asset-card ${asset.is_selected ? 'is-selected' : ''}`} type="button" onClick={() => selectVisualAsset(asset)}>
                     {asset.preview_url ? <img src={asset.preview_url} alt={asset.alt_text || ''} /> : null}
-                    <div className="chat-card-title">{asset.provider || t('visual.idea')}</div>
+                    <div className="chat-card-title">{t('visual.idea')}</div>
                     <div className="chat-card-meta">{asset.search_query || asset.image_prompt || '-'}</div>
                   </button>
                 ))}
@@ -880,6 +922,16 @@ export default function ChatPage() {
               </div>
             ) : null}
           </div>
+          {sending ? (
+            <div className="chat-live-status" role="status" aria-live="polite">
+              <span className="chat-live-status__pulse" />
+              <div>
+                <div className="chat-live-status__title">{processingText()}</div>
+                {longWaitLevel === 1 ? <div className="chat-live-status__hint">{t('chat.processing.slowHint')}</div> : null}
+                {longWaitLevel >= 2 ? <div className="chat-live-status__hint">{t('chat.processing.verySlowHint')}</div> : null}
+              </div>
+            </div>
+          ) : null}
           <div className="chat-inputbar">
             <textarea
               className="field chat-input"
@@ -892,9 +944,10 @@ export default function ChatPage() {
                 }
               }}
               placeholder={t('chat.inputPlaceholder')}
+              disabled={sending}
             />
-            <button className="icon-button send-button" onClick={() => send()} title={t('common.send')} disabled={sending}>
-              <Send size={18} />
+            <button className={`icon-button send-button ${sending ? 'is-loading' : ''}`} onClick={() => send()} title={t('common.send')} disabled={sending} aria-busy={sending}>
+              {sending ? <span className="button-spinner" /> : <Send size={18} />}
             </button>
           </div>
         </section>

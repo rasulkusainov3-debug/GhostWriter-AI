@@ -28,6 +28,9 @@ ALLOWED_INTENTS = {
 
 
 async def detect_chat_intent(message: str, context: dict[str, Any]) -> tuple[ChatIntent, str]:
+    rule_intent = detect_intent(message, context)
+    if rule_intent.name != "general_chat":
+        return rule_intent, "rules"
     try:
         parsed, provider = await classify_intent_with_fallback(message, context)
         intent_name = str(parsed.get("intent") or "").strip()
@@ -37,4 +40,4 @@ async def detect_chat_intent(message: str, context: dict[str, Any]) -> tuple[Cha
             return ChatIntent(intent_name, confidence=confidence, params=params), provider
     except (LLMUnavailable, ValueError, TypeError):
         pass
-    return detect_intent(message, context), "rules"
+    return rule_intent, "rules"

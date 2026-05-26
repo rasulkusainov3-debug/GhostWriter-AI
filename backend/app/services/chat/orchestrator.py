@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -28,6 +30,40 @@ ACTION_REQUIRED_BY_LIFECYCLE = {
     "add_metrics": "add_metrics",
 }
 
+EXPECTED_CHAT_ERROR_STATUSES = {400, 404, 409, 422}
+
+
+def _safe_error_message(detail: Any) -> str:
+    if isinstance(detail, str) and detail.strip():
+        blocked = ("traceback", "sql", "asyncpg", "exception", "stack", "token", "secret")
+        if not any(marker in detail.lower() for marker in blocked):
+            return detail.strip()
+    return "Не удалось выполнить действие. Проверьте данные и попробуйте ещё раз."
+
+
+def _action_required_for_failure(intent_name: str, message: str, profile: dict[str, Any] | None) -> str | None:
+    if not profile:
+        return "complete_profile"
+    lower = message.lower()
+    if intent_name in {"create_content_plan", "show_current_trends", "refresh_trends"}:
+        return "find_trends"
+    if intent_name == "generate_posts":
+        if "trend" in lower or "тренд" in lower:
+            return "select_trend"
+        return "find_trends"
+    if intent_name in {"regenerate_post", "edit_post"}:
+        return "select_post"
+    return None
+
+
+def _recoverable_chat_result(intent_name: str, exc: HTTPException, profile: dict[str, Any] | None) -> dict[str, Any]:
+    message = _safe_error_message(exc.detail)
+    action_required = _action_required_for_failure(intent_name, message, profile)
+    action: dict[str, Any] = {"type": intent_name, "status": "needs_attention"}
+    if action_required:
+        action["action_required"] = action_required
+    return {"text": message, "action": action}
+
 
 def visible_messages(messages: list[dict[str, Any]], limit: int = 50) -> list[dict[str, Any]]:
     visible: list[dict[str, Any]] = []
@@ -43,7 +79,8 @@ def visible_messages(messages: list[dict[str, Any]], limit: int = 50) -> list[di
 
 
 async def save_dialogues(session: AsyncSession, user_id: str, raw_answers: dict[str, Any], dialogues: list[dict[str, Any]]) -> dict[str, Any] | None:
-    raw_answers["chat_dialogues"] = dialogues
+    raw_answers = jsonable_encoder(raw_answers)
+    raw_answers["chat_dialogues"] = jsonable_encoder(dialogues)
     await execute(
         session,
         "UPDATE user_profiles SET raw_answers = CAST(:raw_answers AS JSONB) WHERE user_id = :user_id",
@@ -68,16 +105,18 @@ async def run_chat_pipeline(session: AsyncSession, user: dict[str, Any], payload
     dialogues.append(user_message)
 
     intent, detector_provider = await detect_chat_intent(payload.message, {**context, "messages": dialogues})
-    result = await execute_action(session, user, profile, intent, payload.message, dialogues)
+    try:
+        result = await execute_action(session, user, profile, intent, payload.message, dialogues)
+    except HTTPException as exc:
+        if exc.status_code not in EXPECTED_CHAT_ERROR_STATUSES:
+            raise
+        result = _recoverable_chat_result(intent.name, exc, profile)
     if result.get("profile"):
         profile = result["profile"]
 
     action = result.get("action") or {}
-    action["steps"] = complete_steps(intent.name)
+    action["steps"] = complete_steps(intent.name, failed=action.get("status") == "failed")
     lifecycle = await build_lifecycle(session, user_id)
-    next_action_type = (lifecycle.get("next_action") or {}).get("type")
-    if not action.get("action_required") and next_action_type in ACTION_REQUIRED_BY_LIFECYCLE:
-        action["action_required"] = ACTION_REQUIRED_BY_LIFECYCLE[next_action_type]
     action["lifecycle"] = lifecycle
     if settings.debug_chat:
         action["detector_provider"] = detector_provider
@@ -103,12 +142,14 @@ async def run_chat_pipeline(session: AsyncSession, user: dict[str, Any], payload
     latest_profile = await save_dialogues(session, user_id, latest_raw_answers, dialogues)
     await session.commit()
 
-    return {
+    response_payload = {
         "messages": visible_messages(dialogues),
         "reply": response,
         "profile": latest_profile,
         "lifecycle": lifecycle,
-        "intent": intent.name,
         "action": action,
         "steps": action["steps"],
     }
+    if settings.debug_chat:
+        response_payload["intent"] = intent.name
+    return response_payload

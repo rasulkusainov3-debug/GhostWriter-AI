@@ -18,7 +18,7 @@ from app.services.lifecycle_service import (
     mark_profile_needs_confirmation,
 )
 from app.services.llm.base import LLMUnavailable
-from app.services.llm.factory import AI_UNAVAILABLE_MESSAGE, generate_text_with_fallback
+from app.services.llm.factory import generate_text_with_fallback
 from app.services.post_asset_service import enrich_generated_post, enrich_generated_posts
 from app.services.post_generation_service import generate_from_latest_plan, generate_post_from_trend_id, generate_post_from_trend_message, regenerate_post, update_generated_post
 from app.services.run_tracking_service import save_generation_run
@@ -42,6 +42,22 @@ def _keywords(value: Any) -> list[str]:
 
 def _list_value(raw: str) -> list[str]:
     return [item.strip() for item in re.split(r"[,;]", raw or "") if item.strip()]
+
+
+def _platform_from_message(message: str, params: dict[str, Any] | None = None) -> str | None:
+    raw = (params or {}).get("platform")
+    if raw:
+        return str(raw).strip()
+    text = f" {(message or '').lower()} "
+    if any(word in text for word in [" linkedin ", " линкедин ", " линкедын ", " linked in "]):
+        return "LinkedIn"
+    if any(word in text for word in [" telegram ", " телеграм ", " tg "]):
+        return "Telegram"
+    if any(word in text for word in [" instagram ", " инстаграм "]):
+        return "Instagram"
+    if any(word in text for word in [" twitter ", " твиттер ", " x/twitter ", " x "]):
+        return "X"
+    return None
 
 
 def _profile_text(profile: dict[str, Any] | None) -> str:
@@ -107,6 +123,16 @@ def _trend_index_from_message(message: str) -> int | None:
     return None
 
 
+def _trend_index_from_intent(message: str, intent: ChatIntent) -> int | None:
+    raw_index = intent.params.get("trend_index")
+    if raw_index is not None:
+        try:
+            return int(raw_index)
+        except (TypeError, ValueError):
+            pass
+    return _trend_index_from_message(message)
+
+
 def _trend_id_from_history_index(history: list[dict[str, Any]], index: int) -> int | None:
     for item in reversed(history or []):
         action = item.get("action") if isinstance(item.get("action"), dict) else {}
@@ -117,6 +143,39 @@ def _trend_id_from_history_index(history: list[dict[str, Any]], index: int) -> i
             except (AttributeError, TypeError, ValueError):
                 return None
     return None
+
+
+def _latest_trend_id_from_history(history: list[dict[str, Any]]) -> int | None:
+    for item in reversed(history or []):
+        action = item.get("action") if isinstance(item.get("action"), dict) else {}
+        trends = action.get("trends") if isinstance(action, dict) else None
+        if isinstance(trends, list) and trends:
+            try:
+                return int(trends[0].get("id"))
+            except (AttributeError, TypeError, ValueError):
+                return None
+    return None
+
+
+async def _trend_id_from_topic(session: AsyncSession, user_id: str, message: str) -> int | None:
+    text = (message or "").lower()
+    topic_match = re.search(r"(?:по теме|about|topic)\s+(.+)$", text)
+    topic_text = topic_match.group(1).strip(" .") if topic_match else text
+    topic_terms = {term for term in re.split(r"\W+", topic_text) if len(term) > 2}
+    if not topic_terms:
+        return None
+    trends = await active_trends(session, user_id, limit=10)
+    best: tuple[int, int] | None = None
+    for trend in trends:
+        trend_text = f"{trend.get('topic') or ''} {trend.get('summary') or ''}".lower()
+        trend_terms = {term for term in re.split(r"\W+", trend_text) if len(term) > 2}
+        score = len(topic_terms & trend_terms)
+        if score and (best is None or score > best[0]):
+            try:
+                best = (score, int(trend["id"]))
+            except (KeyError, TypeError, ValueError):
+                pass
+    return best[1] if best else None
 
 
 def _post_id_from_history(history: list[dict[str, Any]]) -> str | None:
@@ -183,9 +242,9 @@ async def _resolve_selected_trend_id(session: AsyncSession, user_id: str, messag
             return int(raw_trend_id)
         except (TypeError, ValueError):
             return None
-    index = _trend_index_from_message(message)
+    index = _trend_index_from_intent(message, intent)
     if index is None:
-        return None
+        return await _trend_id_from_topic(session, user_id, message)
     history_trend_id = _trend_id_from_history_index(history, index)
     if history_trend_id:
         return history_trend_id
@@ -198,16 +257,122 @@ async def _resolve_selected_trend_id(session: AsyncSession, user_id: str, messag
 OpenAIChatUnavailable = LLMUnavailable
 
 
-async def answer_with_llm(message: str, profile: dict[str, Any] | None, history: list[dict[str, Any]]) -> tuple[str, str]:
+def _compact_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    if not profile:
+        return {}
+    return {
+        "name": profile.get("name"),
+        "niche": profile.get("niche"),
+        "profession": profile.get("profession"),
+        "goal": profile.get("goal"),
+        "tone": profile.get("tone"),
+        "audience": profile.get("audience"),
+        "platforms": profile.get("platforms") or [],
+        "values": profile.get("user_values") or [],
+        "avoid": profile.get("avoid"),
+    }
+
+
+async def _compact_general_context(
+    session: AsyncSession,
+    user_id: str,
+    profile: dict[str, Any] | None,
+    history: list[dict[str, Any]],
+) -> dict[str, Any]:
+    trends = await active_trends(session, user_id, limit=5)
+    latest_plan = await latest_content_plan(session, user_id)
+    latest_post = await fetch_one(
+        session,
+        """
+        SELECT id, platform, format, status, draft_text, final_text, trend_id
+        FROM generated_posts
+        WHERE user_id = :user_id
+        ORDER BY generated_at DESC
+        LIMIT 1
+        """,
+        {"user_id": user_id},
+    )
+    try:
+        recommendations = await recommendations_for_user(session, user_id)
+    except Exception:
+        recommendations = {}
+    return {
+        "profile": _compact_profile(profile),
+        "recent_trends": [
+            {
+                "id": trend.get("id"),
+                "topic": trend.get("topic"),
+                "summary": trend.get("summary"),
+                "relevance_level": trend.get("relevance_level") or (trend.get("youtube_insights") or {}).get("relevance_level"),
+            }
+            for trend in trends
+        ],
+        "latest_content_plan": {
+            "id": latest_plan["plan"].get("id"),
+            "title": latest_plan["plan"].get("title"),
+            "status": latest_plan["plan"].get("status"),
+            "items_count": len(latest_plan.get("items") or []),
+        } if latest_plan else None,
+        "latest_post": {
+            "id": latest_post.get("id"),
+            "platform": latest_post.get("platform"),
+            "format": latest_post.get("format"),
+            "status": latest_post.get("status"),
+            "final_text_preview": str(latest_post.get("final_text") or latest_post.get("draft_text") or "")[:400],
+        } if latest_post else None,
+        "recommendations": {
+            "data_quality": recommendations.get("data_quality"),
+            "items": (recommendations.get("recommendations") or [])[:5],
+            "next_actions": (recommendations.get("next_actions") or [])[:3],
+        },
+        "recent_user_messages": [
+            {"role": item.get("role"), "text": str(item.get("text") or "")[:300]}
+            for item in history[-8:]
+            if item.get("role") in {"user", "assistant"}
+        ],
+    }
+
+
+def _general_fallback(message: str, context: dict[str, Any]) -> str:
+    profile = context.get("profile") or {}
+    trends = context.get("recent_trends") or []
+    recommendations = context.get("recommendations") or {}
+    lower = (message or "").lower()
+    if not profile:
+        return "Я пока не вижу ваш цифровой профиль. Заполните профиль или пройдите onboarding, и я смогу отвечать с учётом ниши, аудитории, целей и платформ."
+    if any(phrase in lower for phrase in ["кто я", "что ты знаешь", "профил", "who am i", "what do you know"]):
+        return _profile_text(profile)
+    if any(phrase in lower for phrase in ["тем", "topics", "content ideas", "что писать"]):
+        if trends:
+            lines = [f"- {trend.get('topic')}" for trend in trends[:5]]
+            return "По текущему профилю лучше брать темы, которые связывают вашу экспертизу с целью и аудиторией:\n" + "\n".join(lines)
+        return "Пока нет активных трендов. Сначала запустите поиск трендов, и я предложу темы на основе вашего профиля."
+    if any(phrase in lower for phrase in ["улучш", "лучше", "improve", "better"]):
+        items = recommendations.get("items") or []
+        if items:
+            return "По текущим данным я бы улучшил вот это:\n" + "\n".join(f"- {item}" for item in items[:5])
+        return "Пока мало метрик для точных рекомендаций. Практичный следующий шаг: добавить метрики по постам, а до этого усилить хук, CTA и связь темы с вашей целью."
+    return (
+        "Я могу помочь с профилем, трендами, контент-планом и постами. "
+        "Напишите, что хотите сделать: например, «найди тренды», «создай контент-план» или «сделай пост по второму тренду»."
+    )
+
+
+async def answer_with_llm(message: str, context: dict[str, Any]) -> tuple[str, str]:
     prompt = (
         f"User message: {message}\n"
-        f"Client profile: {profile or {}}\n"
-        f"Recent chat history: {history[-8:]}\n"
-        "Answer briefly as a GhostWriter AI social media assistant. If the user asks for a concrete task, suggest the exact command."
+        f"Compact user context:\n{json.dumps(context, ensure_ascii=False, default=str)}\n\n"
+        "Answer the user's normal question as GhostWriter AI. Use the profile, audience, platforms, "
+        "recent trends, latest plan/post, and recommendations when relevant. If context is missing, say what is needed. "
+        "Do not mention providers, detectors, internal statuses, JSON, database fields, or backend implementation."
     )
     text, provider = await generate_text_with_fallback(
         prompt,
-        system_prompt="You help users refine their client profile, audience, trends, content plans, and posts.",
+        system_prompt=(
+            "You are GhostWriter AI, a helpful social media strategy assistant. "
+            "Answer in the user's language. Be concise, practical, and user-facing. "
+            "Do not expose internal debug information."
+        ),
     )
     return text, provider
 
@@ -259,6 +424,11 @@ async def execute_chat_intent(
     if not profile and intent.name not in {"general_chat"}:
         return {
             "text": "Сначала нужен профиль клиента. Пройдите onboarding или заполните профиль.",
+            "action": {"type": intent.name, "status": "needs_profile", "action_required": "complete_profile"},
+        }
+    if not profile:
+        return {
+            "text": "Я пока не вижу ваш цифровой профиль. Пройдите onboarding или заполните профиль, и я смогу отвечать с учётом ниши, аудитории, целей и платформ.",
             "action": {"type": intent.name, "status": "needs_profile", "action_required": "complete_profile"},
         }
 
@@ -383,21 +553,26 @@ async def execute_chat_intent(
 
     if intent.name == "generate_posts":
         message_context = _latest_message_context(history)
-        if _mentions_specific_trend(message, message_context):
+        platform = _platform_from_message(message, intent.params)
+        is_plural_posts = bool(re.search(r"(?:посты|posts)", message.lower()))
+        if _mentions_specific_trend(message, message_context) or platform or not is_plural_posts:
             trend_id = await _resolve_selected_trend_id(session, user_id, message, history, intent)
+            if not trend_id:
+                trend_id = _latest_trend_id_from_history(history)
             if not trend_id:
                 return {
                     "text": "Выберите тренд, по которому нужно создать пост. Можно нажать кнопку «Создать пост» на карточке тренда или написать: «по второму тренду сделай пост».",
                     "action": {"type": intent.name, "status": "needs_trend_selection", "action_required": "select_trend"},
                 }
             try:
-                result = await generate_post_from_trend_id(session, user_id, profile, trend_id, use_llm=True)
+                result = await generate_post_from_trend_id(session, user_id, profile, trend_id, platform=platform, use_llm=True)
             except HTTPException as exc:
                 return {
                     "text": f"Не удалось создать пост по выбранному тренду: {exc.detail}. Покажите текущие тренды или запустите поиск трендов заново.",
                     "action": {"type": intent.name, "status": "needs_trend", "action_required": "find_trends"},
                 }
-            text = f"Создал черновик поста по тренду «{result['trend']['topic']}» и сохранил его в Generated posts."
+            platform_text = f" для {platform}" if platform else ""
+            text = f"Создал черновик поста{platform_text} по тренду «{result['trend']['topic']}» и сохранил его в Generated posts."
             return {"text": text, "action": {"type": intent.name, "status": "completed", "post": await enrich_generated_post(session, user_id, result["post"]), "trend": result["trend"]}}
         if re.search(r"(?:тренд|trend)", message.lower()):
             try:
@@ -511,7 +686,8 @@ async def execute_chat_intent(
         return {"text": text, "action": {"type": intent.name, "status": "completed", "trend": trend}}
 
     try:
-        text, provider = await answer_with_llm(message, profile, history)
+        general_context = await _compact_general_context(session, user_id, profile, history)
+        text, provider = await answer_with_llm(message, general_context)
         await save_generation_run(
             session,
             user_id=user_id,
@@ -522,8 +698,10 @@ async def execute_chat_intent(
             output_payload={"text": text},
             status="completed",
         )
-        return {"text": text, "action": {"type": "general_chat", "status": "completed", "provider": provider}}
+        return {"text": text, "action": {"type": "general_chat", "status": "completed"}}
     except OpenAIChatUnavailable:
+        general_context = await _compact_general_context(session, user_id, profile, history)
+        text = _general_fallback(message, general_context)
         await save_generation_run(
             session,
             user_id=user_id,
@@ -536,6 +714,6 @@ async def execute_chat_intent(
             error_message="LLM unavailable",
         )
         return {
-            "text": "AI-модель сейчас недоступна, поэтому я использовал базовую логику обработки запроса. Могу найти тренды, показать профиль, создать контент-план или сгенерировать посты по уже найденным темам.",
+            "text": text,
             "action": {"type": "general_chat", "status": "fallback_used"},
         }

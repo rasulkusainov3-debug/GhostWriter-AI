@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,7 @@ from app.services.chat.orchestrator import run_chat_pipeline, visible_messages
 from app.services.lifecycle_service import build_lifecycle
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 async def _load_profile(session: AsyncSession, user_id: str) -> dict[str, Any] | None:
@@ -24,7 +26,8 @@ async def chat(payload: ChatMessageRequest, user: dict = Depends(current_user), 
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Chat action failed. Please try again.") from exc
+        logger.exception("Unhandled /api/chat error for user_id=%s", user.get("id"))
+        raise HTTPException(status_code=500, detail="Не удалось обработать сообщение. Попробуйте ещё раз.") from exc
 
 
 @router.get("")
