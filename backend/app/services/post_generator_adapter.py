@@ -111,6 +111,10 @@ def _brief(slot: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
     topic = _text(trend.get("topic") or slot.get("post_idea"), "Professional insight")
     summary = _text(trend.get("summary"), "")
     keywords = _clean_keywords(trend.get("keywords"))
+    personality = profile.get("personality_brief") or slot.get("personality_brief") or {}
+    personality = personality if isinstance(personality, dict) else {}
+    avoid_phrases = [*_list(profile.get("avoid")), *_list(personality.get("avoid_phrases"))]
+    avoid_phrases = list(dict.fromkeys(item for item in avoid_phrases if item))
     return {
         "name": _text(profile.get("name"), ""),
         "niche": _text(profile.get("niche"), "IT"),
@@ -127,6 +131,8 @@ def _brief(slot: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
         "relevance_reason": _text(trend.get("relevance_reason"), ""),
         "keywords": keywords,
         "analytics_feedback": profile.get("analytics_feedback") or slot.get("analytics_feedback") or {},
+        "personality_brief": personality,
+        "avoid_phrases": avoid_phrases,
     }
 
 
@@ -137,6 +143,10 @@ def _ru(brief: dict[str, Any]) -> bool:
 
 def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: str = "create", current_text: str | None = None) -> str:
     brief = _brief(slot, profile)
+    personality = brief.get("personality_brief") or {}
+    preferred_structure = _list(personality.get("preferred_structure"))
+    voice = _text(personality.get("voice"), brief["tone"])
+    writing_style = _text(personality.get("writing_style"), "")
     if _ru(brief):
         return "\n".join(
             [
@@ -144,6 +154,9 @@ def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: 
                 f"Тема: {brief['topic']}",
                 f"Аудитория: {brief['audience']}",
                 f"Цель: {brief['goal']}",
+                f"Стиль автора: {voice}",
+                f"Подача: {writing_style or 'короткие абзацы, практическая польза, понятный вывод'}",
+                f"Предпочтительная структура: {', '.join(preferred_structure) if preferred_structure else 'hook, insight, example, CTA'}",
                 f"Угол подачи: показать практическую пользу темы для клиентов и экспертность {brief['profession']}.",
                 f"Ключевая мысль: {brief['summary'] or 'тему нужно связать с реальной задачей аудитории.'}",
                 "Хук: начать с проблемы, которую узнает аудитория.",
@@ -156,6 +169,9 @@ def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: 
             f"Topic: {brief['topic']}",
             f"Audience: {brief['audience']}",
             f"Goal: {brief['goal']}",
+            f"Author voice: {voice}",
+            f"Writing style: {writing_style or 'short paragraphs, practical value, clear takeaway'}",
+            f"Preferred structure: {', '.join(preferred_structure) if preferred_structure else 'hook, insight, example, CTA'}",
             f"Angle: connect the trend to practical client value and {brief['profession']} expertise.",
             f"Key insight: {brief['summary'] or 'connect the topic to a real audience problem.'}",
             "Hook: start with a recognizable problem.",
@@ -189,6 +205,14 @@ def build_fallback_social_post(
     profession = _text(brief.get("profession"), "специалиста" if _ru(brief) else "specialist")
     goal = _text(brief.get("goal"), "развивать профиль" if _ru(brief) else "grow a professional profile")
     audience = _text(brief.get("audience"), "аудитории" if _ru(brief) else "the audience")
+    personality = brief.get("personality_brief") or {}
+    preferred_structure = [item.lower() for item in _list(personality.get("preferred_structure"))]
+    voice = _text(personality.get("voice"), brief.get("tone"))
+    case_or_example = any(
+        marker in " ".join(preferred_structure)
+        for marker in ["case", "кейс", "example", "пример", "practical"]
+    )
+    friendly = any(marker in voice.lower() for marker in ["дружелюб", "тепл", "friendly", "warm"])
 
     ru = _ru(brief)
     angle_ru = random.choice(
@@ -210,11 +234,16 @@ def build_fallback_social_post(
 
     if ru:
         if mode == "shorter" or platform == "telegram":
+            example_line = (
+                "Добавьте короткий пример из практики: какая задача была, что изменили и какой результат получили."
+                if case_or_example
+                else "Начните с одного процесса, одного результата и одного понятного примера."
+            )
             return (
                 f"{topic}: важна не сама технология, а то, какую задачу она решает.\n\n"
                 f"{summary or 'По найденным материалам видно, что тема становится заметнее для профессиональной аудитории.'}\n\n"
                 f"Практическая ценность здесь в том, что экспертность {profession} можно показать через понятный результат, а не через абстрактную теорию. Цель: {goal}.\n\n"
-                "Начните с одного процесса, одного результата и одного понятного примера."
+                f"{example_line}"
             )
         if mode == "more_human":
             return (
@@ -239,6 +268,8 @@ def build_fallback_social_post(
             hook = "Я бы усилил этот пост так: меньше общих слов, больше практической пользы."
         else:
             hook = f"{topic} - это не просто тренд, а повод показать реальную экспертизу."
+        if friendly and mode not in {"more_expert", "stronger_hook"}:
+            hook = f"Давайте простыми словами: {hook}"
         return (
             f"{hook}\n\n"
             f"{summary or 'По найденным материалам видно, что тема набирает внимание у профессиональной аудитории.'}\n\n"
@@ -248,11 +279,16 @@ def build_fallback_social_post(
         )
 
     if mode == "shorter" or platform == "telegram":
+        example_line = (
+            "Add one practical example: the starting problem, the change, and the result."
+            if case_or_example
+            else "Start with one process, one measurable result, and one clear next step."
+        )
         return (
             f"{topic} matters when it solves a concrete problem.\n\n"
             f"{summary or 'The materials show growing practical interest around this topic.'}\n\n"
             f"The useful angle is simple: connect the idea to outcomes your audience can understand, and show how {profession} expertise turns it into practice.\n\n"
-            "Start with one process, one measurable result, and one clear next step."
+            f"{example_line}"
         )
     if mode == "more_human":
         return (
@@ -276,6 +312,8 @@ def build_fallback_social_post(
         if mode == "stronger_hook"
         else f"{topic} is not just a trend. It is a chance to show practical expertise."
     )
+    if friendly and mode not in {"more_expert", "stronger_hook"}:
+        hook = f"Let’s keep it simple: {hook}"
     return (
         f"{hook}\n\n"
         f"{summary or 'The sources show growing attention from professional audiences.'}\n\n"
@@ -293,6 +331,8 @@ def _system_prompt() -> str:
         "Do not analyze the input data.\n"
         "Do not describe fields, structure, or potential uses of the data.\n"
         "Do not mention backend metadata, schemas, IDs, or data structures.\n"
+        "Combine the selected platform style with the user's personality brief.\n"
+        "Use style examples only as writing-pattern guidance; do not copy them.\n"
         "Write only the final social media post for the selected platform."
     )
 
@@ -319,6 +359,11 @@ def _llm_prompt(
     stricter: bool = False,
 ) -> str:
     brief = _brief(slot, profile)
+    personality = brief.get("personality_brief") or {}
+    preferred_structure = _list(personality.get("preferred_structure"))
+    vocabulary_preferences = _list(personality.get("vocabulary_preferences"))
+    avoid_phrases = _list(personality.get("avoid_phrases") or brief.get("avoid_phrases"))
+    examples = personality.get("examples") if isinstance(personality.get("examples"), list) else []
     lines = [
         "Internal content brief:",
         f"- Platform: {brief['platform']}",
@@ -332,12 +377,21 @@ def _llm_prompt(
         f"- Relevance reason: {brief['relevance_reason'] or 'Use only if it helps the post.'}",
         f"- Keywords: {', '.join(brief['keywords']) or 'none'}",
         f"- Analytics guidance: {_text((brief.get('analytics_feedback') or {}).get('guidance'), 'none')}",
+        f"- Personality voice: {_text(personality.get('voice'), brief['tone'])}",
+        f"- Writing style: {_text(personality.get('writing_style'), 'short paragraphs, practical insight, clear CTA')}",
+        f"- Preferred structure: {', '.join(preferred_structure) if preferred_structure else 'hook, insight, example, CTA'}",
+        f"- Vocabulary preferences: {', '.join(vocabulary_preferences) or 'none'}",
+        f"- Avoid phrases/topics: {', '.join(avoid_phrases) or 'none'}",
         "",
         f"Task: {_mode_instruction(mode)}",
         "",
         "Draft / working note:",
         draft_text,
     ]
+    if examples:
+        lines.extend(["", "Approved/edited style examples to imitate as pattern only, not copy:"])
+        for example in examples[:3]:
+            lines.append(f"- [{example.get('platform') or 'post'}] {example.get('text') or ''}")
     if current_text:
         lines.extend(["", "Current final text to improve or avoid repeating:", current_text])
     if stricter:
@@ -442,6 +496,7 @@ class PostGeneratorAdapter:
             adapted, stats = _adapt_for_platform(build_fallback_social_post(slot, profile, mode=mode, current_text=current_text), _text(slot.get("platform"), "LinkedIn"))
             provider = "template"
 
+        personality = (profile.get("personality_brief") or slot.get("personality_brief") or {})
         stats = {
             **stats,
             "generation_mode": mode,
@@ -449,6 +504,8 @@ class PostGeneratorAdapter:
             "fallback_used": fallback_used,
             "invalid_output_detected": invalid_output_detected,
             "provider_used": provider,
+            "personality_source": personality.get("source") if isinstance(personality, dict) else None,
+            "style_examples_used": len(personality.get("examples") or []) if isinstance(personality, dict) else 0,
         }
         return {
             "draft_text": draft_text.strip(),
@@ -477,6 +534,7 @@ class PostGeneratorAdapter:
             draft_text = raw_draft
         final_text = build_fallback_social_post(slot, profile, mode=mode, current_text=current_text)
         adapted, stats = _adapt_for_platform(final_text, _text(slot.get("platform"), "LinkedIn"))
+        personality = (profile.get("personality_brief") or slot.get("personality_brief") or {})
         return {
             "draft_text": draft_text.strip(),
             "final_text": adapted.strip(),
@@ -488,6 +546,8 @@ class PostGeneratorAdapter:
                 "fallback_used": True,
                 "invalid_output_detected": invalid_output_detected,
                 "provider_used": "template",
+                "personality_source": personality.get("source") if isinstance(personality, dict) else None,
+                "style_examples_used": len(personality.get("examples") or []) if isinstance(personality, dict) else 0,
             },
         }
 

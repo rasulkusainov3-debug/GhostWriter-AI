@@ -14,14 +14,49 @@ class ChatIntent:
 
 PROFILE_FIELD_PATTERNS = {
     "tone": ["тон", "стиль", "tone", "style"],
-    "platforms": ["платформ", "соцсет", "platform", "social"],
+    "platforms": ["платформ", "соцсет", "соцсеть", "platform", "social"],
     "audience": ["аудитор", "audience"],
-    "goal": ["цель", "goal"],
+    "goal": ["цел", "goal"],
     "profession": ["профес", "работ", "job", "profession"],
-    "niche": ["ниша", "niche"],
-    "avoid": ["избег", "нельзя", "avoid"],
+    "niche": ["ниш", "niche"],
+    "avoid": ["избег", "нельзя", "не используй", "убери", "исключи", "avoid"],
     "user_values": ["ценност", "values"],
 }
+
+CHANGE_WORDS = [
+    "измени",
+    "изменить",
+    "обнови",
+    "обновить",
+    "поменяй",
+    "поменять",
+    "исправь",
+    "исправить",
+    "запиши",
+    "укажи",
+    "теперь",
+    "change",
+    "update",
+    "set",
+]
+
+PROFILE_FIELD_WORDS = {
+    "goal": ["цель", "цели", "целю", "goal"],
+    "audience": ["аудитория", "аудиторию", "аудитории", "audience"],
+    "niche": ["ниша", "нишу", "ниши", "niche"],
+    "profession": ["профессия", "профессию", "профессии", "profession", "job"],
+    "tone": ["тон", "стиль", "tone", "style"],
+    "platforms": ["платформа", "платформу", "платформы", "соцсеть", "соцсети", "platform"],
+    "avoid": ["избегать", "нельзя", "не используй", "убери", "исключи", "avoid"],
+    "user_values": ["ценности", "ценность", "values"],
+}
+
+PROFILE_DIRECT_RE = re.compile(
+    r"^(?:теперь\s+)?(?:моя|мой|мои)\s+"
+    r"(?P<field>цель|аудитория|ниша|профессия|тон|стиль|платформа|платформы|соцсеть|соцсети|ценности)"
+    r"\s*(?:[-—:]\s*|это\s+)?(?P<value>.+)$",
+    flags=re.IGNORECASE,
+)
 
 
 def _platform_from_text(text: str) -> str | None:
@@ -53,6 +88,145 @@ def _extract_value(message: str) -> str | None:
     return match.group(1).strip(" .") if match else None
 
 
+def _field_from_text(text: str) -> str | None:
+    for field, aliases in PROFILE_FIELD_PATTERNS.items():
+        if any(alias in text for alias in aliases):
+            return field
+    return None
+
+
+def _field_from_word(word: str) -> str | None:
+    lowered = word.lower()
+    for field, variants in PROFILE_FIELD_WORDS.items():
+        if lowered in variants:
+            return field
+    return None
+
+
+def _intent_for_profile_field(field: str) -> str:
+    return {
+        "tone": "change_tone",
+        "platforms": "update_platforms",
+        "audience": "edit_audience_profile",
+    }.get(field, "edit_profile")
+
+
+def _clean_profile_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = re.sub(r"\s+", " ", value).strip(" .,:;—-")
+    return cleaned or None
+
+
+def _tone_value_from_text(text: str) -> str | None:
+    if any(word in text for word in ["дружелюб", "теплее", "friendly", "warmer"]):
+        return "дружелюбный"
+    if any(word in text for word in ["эксперт", "профессиональ", "expert", "professional"]):
+        return "экспертный"
+    if any(word in text for word in ["живее", "человеч", "human"]):
+        return "живой"
+    if any(word in text for word in ["официаль", "formal"]):
+        return "официальный"
+    if any(word in text for word in ["проще", "simple"]):
+        return "простой"
+    return None
+
+
+def _extract_profile_value(message: str, field: str, text: str) -> str | None:
+    if field == "tone":
+        return _tone_value_from_text(text) or _clean_profile_value(_extract_value(message))
+    if field == "platforms":
+        return _platform_from_text(text) or _clean_profile_value(_extract_value(message))
+    if field == "avoid":
+        avoid_match = re.search(
+            r"(?:убери|исключи|не\s+используй|избегай|нельзя)\s+(.+?)(?:\s+из\s+тем|\s+в\s+темах|\s+в\s+постах|\s*$)",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if avoid_match:
+            value = _clean_profile_value(avoid_match.group(1))
+            return {"политику": "политика"}.get((value or "").lower(), value)
+    direct = PROFILE_DIRECT_RE.search(message.strip())
+    if direct and _field_from_word(direct.group("field")) == field:
+        return _clean_profile_value(direct.group("value"))
+    change_match = re.search(
+        r"(?:измени|изменить|обнови|обновить|поменяй|поменять|исправь|исправить|запиши|укажи|change|update|set)"
+        r".+?\s+(?:на|to|as)\s+(.+)$",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if change_match:
+        return _clean_profile_value(change_match.group(1))
+    return _clean_profile_value(_extract_value(message))
+
+
+def _style_update_intent(text: str) -> ChatIntent | None:
+    if any(phrase in text for phrase in ["пиши дружелюбнее", "пиши теплее", "write friendlier", "warmer voice"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "voice",
+                "value": "более дружелюбный тон",
+                "confirmation": "Готово, я обновил стиль: более дружелюбный тон.",
+            },
+        )
+    if any(phrase in text for phrase in ["сделай стиль экспертнее", "пиши экспертнее", "more expert style"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "voice",
+                "value": "более экспертный, уверенный и практичный тон",
+                "confirmation": "Готово, я обновил стиль: более экспертная подача.",
+            },
+        )
+    if any(phrase in text for phrase in ["меньше формально", "менее формально", "less formal"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "writing_style",
+                "value": "менее формально, проще, живее и ближе к разговорной подаче",
+                "confirmation": "Готово, я обновил стиль: меньше формальности, больше живой подачи.",
+            },
+        )
+    if any(phrase in text for phrase in ["больше кейсов", "more case studies", "more cases"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "preferred_structure",
+                "value": ["case", "practical_example"],
+                "confirmation": "Готово, я обновил стиль: буду чаще использовать кейсы и практические примеры.",
+            },
+        )
+    if any(phrase in text for phrase in ["пиши как я", "write like me"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "writing_style",
+                "value": "ориентироваться на мои утверждённые и отредактированные посты, если есть достаточно примеров",
+                "confirmation": "Готово, я обновил стиль: буду ориентироваться на ваши сохранённые удачные посты, когда примеров достаточно.",
+            },
+        )
+    if any(phrase in text for phrase in ["не используй слишком много теории", "меньше теории", "less theory"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "avoid_phrases",
+                "value": ["слишком много теории"],
+                "confirmation": "Готово, я обновил стиль: буду избегать слишком теоретичной подачи.",
+            },
+        )
+    if any(phrase in text for phrase in ["добавь больше практических примеров", "more practical examples"]):
+        return ChatIntent(
+            "update_style",
+            params={
+                "field": "preferred_structure",
+                "value": ["practical_example"],
+                "confirmation": "Готово, я обновил стиль: добавлю больше практических примеров.",
+            },
+        )
+    return None
+
+
 def _with_post_params(platform: str | None, trend_index: int | None) -> ChatIntent:
     params: dict[str, Any] = {}
     if platform:
@@ -66,6 +240,39 @@ def detect_intent(message: str, context: dict[str, Any] | None = None) -> ChatIn
     text = message.lower().strip()
     platform = _platform_from_text(text)
     trend_index = _trend_index_from_text(text)
+
+    style_intent = _style_update_intent(text)
+    if style_intent:
+        return style_intent
+
+    direct_profile_match = PROFILE_DIRECT_RE.search(message.strip())
+    if direct_profile_match:
+        field = _field_from_word(direct_profile_match.group("field") or "")
+        if field:
+            value = _extract_profile_value(message, field, text)
+            return ChatIntent(_intent_for_profile_field(field), params={"field": field, "value": value})
+
+    if any(word in text for word in ["убери", "исключи", "не используй", "избегай"]):
+        value = _extract_profile_value(message, "avoid", text)
+        if value:
+            return ChatIntent("edit_profile", params={"field": "avoid", "value": value})
+
+    if "пиши" in text and any(
+        word in text for word in ["дружелюб", "эксперт", "человеч", "живее", "официаль", "проще", "теплее"]
+    ):
+        return ChatIntent("change_tone", params={"field": "tone", "value": _extract_profile_value(message, "tone", text)})
+
+    if platform and any(
+        phrase in text
+        for phrase in ["добавь", "добавить", "платформа", "платформу", "соцсеть", "соцсети", "пиши в", "публикуй в"]
+    ):
+        return ChatIntent("update_platforms", params={"field": "platforms", "value": platform})
+
+    if any(word in text for word in CHANGE_WORDS):
+        field = _field_from_text(text)
+        if field:
+            value = _extract_profile_value(message, field, text)
+            return ChatIntent(_intent_for_profile_field(field), params={"field": field, "value": value})
 
     if any(
         phrase in text
@@ -111,6 +318,9 @@ def detect_intent(message: str, context: dict[str, Any] | None = None) -> ChatIn
             "make it shorter",
             "make it more expert",
         ]
+    ) or (
+        any(word in text for word in ["короче", "экспертнее", "живее", "человечнее", "хуком", "hook"])
+        and any(word in text for word in ["пост", "текст", "этот", "его", "it"])
     ):
         return ChatIntent("regenerate_post")
 
@@ -178,35 +388,5 @@ def detect_intent(message: str, context: dict[str, Any] | None = None) -> ChatIn
         return ChatIntent("explain_profile")
     if any(phrase in text for phrase in ["объясни тренд", "почему тренд", "explain trend"]):
         return ChatIntent("explain_trend")
-
-    profile_match = re.search(r"^(моя|мой|мои)\s+(цель|аудитория|ниша|профессия)\s*[-—:]", text)
-    if profile_match:
-        field_map = {
-            "цель": "goal",
-            "аудитория": "audience",
-            "ниша": "niche",
-            "профессия": "profession",
-        }
-        field = field_map.get(profile_match.group(2))
-        name = "edit_audience_profile" if field == "audience" else "edit_profile"
-        return ChatIntent(name, params={"field": field, "value": _extract_value(message)})
-
-    if platform and any(phrase in text for phrase in ["платформа", "пиши в", "публикуй в"]):
-        return ChatIntent("update_platforms", params={"field": "platforms", "value": platform})
-
-    if "пиши" in text and any(
-        word in text for word in ["дружелюб", "эксперт", "человеч", "живее", "официаль", "проще"]
-    ):
-        return ChatIntent("change_tone", params={"field": "tone", "value": _extract_value(message) or message})
-
-    if any(word in text for word in ["измени", "обнови", "поменяй", "исправь", "change", "update", "set"]):
-        for field, aliases in PROFILE_FIELD_PATTERNS.items():
-            if any(alias in text for alias in aliases):
-                name = {
-                    "tone": "change_tone",
-                    "platforms": "update_platforms",
-                    "audience": "edit_audience_profile",
-                }.get(field, "edit_profile")
-                return ChatIntent(name, params={"field": field, "value": _extract_value(message)})
 
     return ChatIntent("general_chat", confidence=0.5)

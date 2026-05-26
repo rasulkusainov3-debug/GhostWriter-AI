@@ -22,6 +22,7 @@ from app.services.llm.factory import generate_text_with_fallback
 from app.services.post_asset_service import enrich_generated_post, enrich_generated_posts
 from app.services.post_generation_service import generate_from_latest_plan, generate_post_from_trend_id, generate_post_from_trend_message, regenerate_post, update_generated_post
 from app.services.run_tracking_service import save_generation_run
+from app.services.style_context_service import update_personality_from_chat
 from app.services.trend_service import active_trends, find_and_save_trends
 
 
@@ -42,6 +43,35 @@ def _keywords(value: Any) -> list[str]:
 
 def _list_value(raw: str) -> list[str]:
     return [item.strip() for item in re.split(r"[,;]", raw or "") if item.strip()]
+
+
+def _append_unique(items: list[str], additions: list[str]) -> list[str]:
+    seen = {item.lower() for item in items}
+    result = list(items)
+    for item in additions:
+        if item and item.lower() not in seen:
+            result.append(item)
+            seen.add(item.lower())
+    return result
+
+
+def _profile_field_label(field: str | None) -> str:
+    return {
+        "niche": "нишу",
+        "goal": "цель",
+        "audience": "аудиторию",
+        "profession": "профессию",
+        "tone": "тон",
+        "platforms": "платформы",
+        "avoid": "список тем, которых нужно избегать",
+        "user_values": "ценности",
+    }.get(field or "", "профиль")
+
+
+def _display_profile_value(value: Any) -> str:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if str(item).strip())
+    return str(value)
 
 
 def _platform_from_message(message: str, params: dict[str, Any] | None = None) -> str | None:
@@ -380,7 +410,11 @@ async def answer_with_llm(message: str, context: dict[str, Any]) -> tuple[str, s
 async def _update_profile(session: AsyncSession, user_id: str, profile: dict[str, Any], field: str, value: Any) -> dict[str, Any]:
     if not field or value in (None, ""):
         raise HTTPException(status_code=409, detail="Уточните, какое значение нужно сохранить.")
-    if field in {"platforms", "user_values"}:
+    if field == "platforms":
+        current = _keywords((profile or {}).get("platforms"))
+        incoming = _list_value(value) if isinstance(value, str) else _keywords(value)
+        value = _append_unique(current, incoming)
+    elif field in {"user_values"}:
         value = _list_value(value) if isinstance(value, str) else value
     merged = {**profile, field: value}
     await execute(
@@ -608,6 +642,31 @@ async def execute_chat_intent(
         post = await regenerate_post(session, user_id, str(posts[0]["id"]), profile, use_llm=True, mode=mode)
         return {"text": "Перегенерировал последний пост и сохранил новый черновик.", "action": {"type": intent.name, "status": "completed", "post": await enrich_generated_post(session, user_id, post)}}
 
+    if intent.name == "update_style":
+        field = intent.params.get("field")
+        value = intent.params.get("value")
+        if not field or value in (None, "", []):
+            return {
+                "text": "Уточните, какой стиль нужно сохранить: например, «пиши дружелюбнее» или «больше кейсов».",
+                "action": {"type": intent.name, "status": "needs_clarification"},
+            }
+        updated = await update_personality_from_chat(session, user_id, field, value)
+        await save_generation_run(
+            session,
+            user_id=user_id,
+            run_type="chat_style_update",
+            provider=None,
+            agent_name="chat_action_service",
+            input_payload={"intent": intent.name, "field": field, "value": value},
+            output_payload={"updated_style": {field: value}},
+            status="completed",
+        )
+        return {
+            "text": intent.params.get("confirmation") or "Готово, я обновил индивидуальный стиль для будущих постов.",
+            "profile": updated,
+            "action": {"type": intent.name, "status": "completed", "updated_style": {field: value}},
+        }
+
     if intent.name in {"edit_profile", "edit_audience_profile", "change_tone", "update_platforms"}:
         field = intent.params.get("field")
         value = intent.params.get("value")
@@ -623,7 +682,7 @@ async def execute_chat_intent(
             status="completed",
         )
         return {
-            "text": f"Обновил поле «{field}». Хотите пересобрать тренды, контент-план или посты под новые данные?",
+            "text": f"Готово, я изменил {_profile_field_label(field)} на {_display_profile_value(value)}. Хотите пересобрать тренды, контент-план или посты под новые данные?",
             "profile": updated,
             "action": {"type": intent.name, "status": "completed", "updated": {field: value}},
         }

@@ -12,6 +12,7 @@ from app.services.analytics_context_service import build_analytics_context, buil
 from app.services.content_plan_service import latest_content_plan
 from app.services.post_generator_adapter import normalize_generation_mode, post_generator_adapter
 from app.services.run_tracking_service import save_generation_run
+from app.services.style_context_service import build_personality_brief, merge_personality_with_profile
 from app.services.trend_service import active_trends
 
 
@@ -74,7 +75,8 @@ async def generate_posts_for_plan(
         items = [item for item in items if str(item["id"]) in item_ids]
     created = []
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
-    generator_profile = {**profile, "analytics_feedback": analytics_feedback}
+    personality_brief = await build_personality_brief(session, user_id)
+    generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
     for item in items:
         slot = {
             "slot_id": str(item["id"]),
@@ -90,6 +92,7 @@ async def generate_posts_for_plan(
                 "keywords": item.get("trend_keywords") or [],
             },
             "analytics_feedback": analytics_feedback,
+            "personality_brief": personality_brief,
         }
         generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
         post = await fetch_one(
@@ -128,6 +131,11 @@ async def generate_posts_for_plan(
                 "metrics_rows": analytics_context.get("metrics_rows"),
                 "best_platforms": analytics_feedback.get("best_platforms", []),
                 "best_formats": analytics_feedback.get("best_formats", []),
+                "personality": {
+                    "voice": personality_brief.get("voice"),
+                    "writing_style": personality_brief.get("writing_style"),
+                    "examples_used": personality_brief.get("examples_used"),
+                },
             },
         },
         output_payload={
@@ -160,7 +168,9 @@ async def generate_post_from_trend_message(session: AsyncSession, user_id: str, 
     slot = _slot_from_trend(trend, profile, message)
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
     slot["analytics_feedback"] = analytics_feedback
-    generator_profile = {**profile, "analytics_feedback": analytics_feedback}
+    personality_brief = await build_personality_brief(session, user_id)
+    slot["personality_brief"] = personality_brief
+    generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
     generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
     post = await fetch_one(
         session,
@@ -195,6 +205,11 @@ async def generate_post_from_trend_message(session: AsyncSession, user_id: str, 
                 "metrics_rows": analytics_context.get("metrics_rows"),
                 "best_platforms": analytics_feedback.get("best_platforms", []),
                 "best_formats": analytics_feedback.get("best_formats", []),
+                "personality": {
+                    "voice": personality_brief.get("voice"),
+                    "writing_style": personality_brief.get("writing_style"),
+                    "examples_used": personality_brief.get("examples_used"),
+                },
             },
         },
         output_payload={
@@ -231,7 +246,9 @@ async def generate_post_from_trend_id(
         slot["format"] = format
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
     slot["analytics_feedback"] = analytics_feedback
-    generator_profile = {**profile, "analytics_feedback": analytics_feedback}
+    personality_brief = await build_personality_brief(session, user_id)
+    slot["personality_brief"] = personality_brief
+    generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
     generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
     post = await fetch_one(
         session,
@@ -268,6 +285,11 @@ async def generate_post_from_trend_id(
                 "metrics_rows": analytics_context.get("metrics_rows"),
                 "best_platforms": analytics_feedback.get("best_platforms", []),
                 "best_formats": analytics_feedback.get("best_formats", []),
+                "personality": {
+                    "voice": personality_brief.get("voice"),
+                    "writing_style": personality_brief.get("writing_style"),
+                    "examples_used": personality_brief.get("examples_used"),
+                },
             },
         },
         output_payload={
@@ -329,7 +351,9 @@ async def regenerate_post(
         "generation_mode": mode,
         "current_final_text": post.get("final_text"),
     }
-    generator_profile = {**profile, "analytics_feedback": analytics_feedback}
+    personality_brief = await build_personality_brief(session, user_id)
+    slot["personality_brief"] = personality_brief
+    generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
     generated = await post_generator_adapter.generate_post_async(
         slot,
         generator_profile,
@@ -363,6 +387,11 @@ async def regenerate_post(
                 "best_platforms": analytics_feedback.get("best_platforms", []),
                 "best_formats": analytics_feedback.get("best_formats", []),
                 "regeneration_guidance": analytics_feedback.get("regeneration_guidance", []),
+                "personality": {
+                    "voice": personality_brief.get("voice"),
+                    "writing_style": personality_brief.get("writing_style"),
+                    "examples_used": personality_brief.get("examples_used"),
+                },
             },
         },
         output_payload={

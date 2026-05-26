@@ -20,6 +20,7 @@ ALLOWED_INTENTS = {
     "edit_audience_profile",
     "change_tone",
     "update_platforms",
+    "update_style",
     "explain_profile",
     "explain_trend",
     "content_plan_analytics",

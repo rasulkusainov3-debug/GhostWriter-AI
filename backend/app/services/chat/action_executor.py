@@ -21,6 +21,7 @@ ACTION_STEPS = {
     "edit_audience_profile": ["editing_profile", "saving_result"],
     "change_tone": ["editing_profile", "saving_result"],
     "update_platforms": ["editing_profile", "saving_result"],
+    "update_style": ["editing_profile", "saving_result"],
     "explain_profile": ["loading_profile", "done"],
     "explain_trend": ["loading_trends", "done"],
     "content_plan_analytics": ["analyzing_plan", "done"],
