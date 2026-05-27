@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from fastapi.encoders import jsonable_encoder
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -207,6 +207,7 @@ async def schedule_generated_post(
         "social_account": public_social_account(account) if account else None,
         "snapshot_at": datetime.now(UTC).isoformat(),
     }
+    payload = jsonable_encoder(payload)
     try:
         schedule = await fetch_one(
             session,
