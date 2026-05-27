@@ -11,6 +11,8 @@ from app.core.config import settings
 from app.services.llm.base import LLMUnavailable
 from app.services.llm.factory import generate_text_with_fallback
 
+WORD_RE = r"A-Za-zА-Яа-яЁё0-9"
+
 
 class VisualAdapter:
     def __init__(self) -> None:
@@ -43,23 +45,62 @@ class VisualAdapter:
             str(value or "")
             for value in [
                 post.get("trend_topic"),
+                post.get("final_text"),
                 post.get("format"),
+                post.get("platform"),
                 (profile or {}).get("profession"),
                 (profile or {}).get("niche"),
             ]
         )
-        words = re.findall(r"[A-Za-zА-Яа-я0-9]+", raw.lower())
-        stop = {"the", "and", "for", "with", "this", "that", "как", "для", "или", "про", "что"}
+        words = re.findall(f"[{WORD_RE}]+", raw.lower())
+        stop = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "this",
+            "that",
+            "your",
+            "you",
+            "post",
+            "linkedin",
+            "telegram",
+            "как",
+            "для",
+            "или",
+            "про",
+            "что",
+            "это",
+        }
         useful = [word for word in words if len(word) > 3 and word not in stop][:5]
         return " ".join(useful) if useful else "professional workspace"
+
+    def _search_query(self, post: dict[str, Any], profile: dict[str, Any] | None) -> str:
+        topic = (post.get("trend_topic") or post.get("format") or "").strip()
+        profession = ((profile or {}).get("profession") or (profile or {}).get("niche") or "").strip()
+        platform = (post.get("platform") or "").strip()
+        query = " ".join(part for part in [topic, profession, "professional editorial visual", platform] if part)
+        query = re.sub(r"\s+", " ", query).strip()
+        return query[:180] if query else self._template_query(post, profile)
+
+    def _safe_error(self, error: Exception | str) -> str:
+        text = str(error)
+        for secret in [settings.unsplash_access_key, settings.pexels_api_key]:
+            if secret:
+                text = text.replace(secret, "[redacted]")
+        return text[:500]
 
     def _template_result(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any]:
         query = self._template_query(post, profile)
         platform = post.get("platform") or "social media"
         prompt = (
-            f"Create a clean professional visual for a {platform} post about {post.get('trend_topic') or post.get('format') or query}. "
+            f"Create a clean professional visual for a {platform} post about "
+            f"{post.get('trend_topic') or post.get('format') or query}. "
             f"Style: modern, credible, human, suitable for {(profile or {}).get('profession') or 'an expert'}."
         )
+        metadata: dict[str, Any] = {"fallback": "template"}
+        if not settings.unsplash_access_key and not settings.pexels_api_key:
+            metadata["provider_configured"] = False
         return {
             "asset_type": "image",
             "provider": "template",
@@ -70,7 +111,7 @@ class VisualAdapter:
             "source_url": None,
             "author": None,
             "alt_text": query,
-            "metadata": {"fallback": "template"},
+            "metadata": metadata,
         }
 
     def _pexels_search(self, query: str) -> dict[str, Any] | None:
@@ -88,18 +129,57 @@ class VisualAdapter:
             return None
         photo = photos[0]
         src = photo.get("src") or {}
-        photographer = photo.get("photographer")
+        preview_url = src.get("large") or src.get("medium") or src.get("original")
+        if not preview_url:
+            return None
         return {
             "asset_type": "image",
             "provider": "pexels",
             "status": "selected",
             "image_prompt": None,
             "search_query": query,
-            "preview_url": src.get("large") or src.get("medium") or src.get("original"),
+            "preview_url": preview_url,
             "source_url": photo.get("url"),
-            "author": photographer,
+            "author": photo.get("photographer"),
             "alt_text": photo.get("alt") or query,
             "metadata": {"pexels_id": photo.get("id"), "photographer_url": photo.get("photographer_url")},
+        }
+
+    def _unsplash_search(self, query: str) -> dict[str, Any] | None:
+        if not settings.unsplash_access_key:
+            return None
+        response = requests.get(
+            "https://api.unsplash.com/search/photos",
+            params={"query": query, "per_page": 5, "orientation": "landscape", "content_filter": "high"},
+            headers={"Authorization": f"Client-ID {settings.unsplash_access_key}", "Accept-Version": "v1"},
+            timeout=12,
+        )
+        response.raise_for_status()
+        results = response.json().get("results") or []
+        if not results:
+            return None
+        image = results[0]
+        urls = image.get("urls") or {}
+        user = image.get("user") or {}
+        links = image.get("links") or {}
+        preview_url = urls.get("regular") or urls.get("small") or urls.get("thumb")
+        if not preview_url:
+            return None
+        return {
+            "asset_type": "image",
+            "provider": "unsplash",
+            "status": "selected",
+            "image_prompt": None,
+            "search_query": query,
+            "preview_url": preview_url,
+            "source_url": links.get("html"),
+            "author": user.get("name") or user.get("username"),
+            "alt_text": image.get("alt_description") or image.get("description") or query,
+            "metadata": {
+                "unsplash_id": image.get("id"),
+                "author_url": (user.get("links") or {}).get("html"),
+                "provider": "unsplash_search",
+            },
         }
 
     def _agent2_unsplash(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -170,31 +250,54 @@ class VisualAdapter:
 
     async def generate_visual(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any]:
         errors: list[str] = []
-        if settings.visual_provider.lower() == "pexels":
+        provider = settings.visual_provider.lower().strip()
+        query = self._search_query(post, profile)
+
+        if provider == "pexels":
             try:
-                pexels = self._pexels_search(self._template_query(post, profile))
+                pexels = self._pexels_search(query)
                 if pexels:
                     return pexels
             except Exception as exc:
-                errors.append(f"pexels: {exc}")
+                errors.append(f"pexels: {self._safe_error(exc)}")
+
+        if provider != "pexels":
+            try:
+                unsplash = self._unsplash_search(query)
+                if unsplash:
+                    return unsplash
+            except Exception as exc:
+                errors.append(f"unsplash: {self._safe_error(exc)}")
+
         try:
             agent2_result = self._agent2_unsplash(post, profile)
             if agent2_result:
                 return agent2_result
         except Exception as exc:
-            errors.append(f"agent2_beautify: {exc}")
-        if settings.visual_provider.lower() != "pexels":
+            errors.append(f"agent2_beautify: {self._safe_error(exc)}")
+
+        if provider != "pexels":
             try:
-                pexels = self._pexels_search(self._template_query(post, profile))
+                pexels = self._pexels_search(query)
                 if pexels:
                     return pexels
             except Exception as exc:
-                errors.append(f"pexels: {exc}")
+                errors.append(f"pexels: {self._safe_error(exc)}")
+
+        if provider == "pexels":
+            try:
+                unsplash = self._unsplash_search(query)
+                if unsplash:
+                    return unsplash
+            except Exception as exc:
+                errors.append(f"unsplash: {self._safe_error(exc)}")
+
         llm_result = await self._llm_visual_idea(post, profile)
         if llm_result:
             if errors:
                 llm_result["metadata"] = {**llm_result["metadata"], "adapter_errors": errors[:3]}
             return llm_result
+
         template = self._template_result(post, profile)
         if errors:
             template["metadata"] = {**template["metadata"], "adapter_errors": errors[:3]}

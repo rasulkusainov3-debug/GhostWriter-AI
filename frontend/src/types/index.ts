@@ -183,6 +183,7 @@ export type PublisherRunResult = {
   failed: number;
   skipped: number;
   dry_run: boolean;
+  simulated?: number;
 };
 
 export type AnalyticsPattern = {

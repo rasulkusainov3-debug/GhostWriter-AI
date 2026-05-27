@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -8,6 +10,7 @@ from app.services.run_tracking_service import save_generation_run
 from app.services.telegram_adapter import TelegramPublishError, sanitize_telegram_error, telegram_adapter
 
 MAX_TELEGRAM_ATTEMPTS = 3
+logger = logging.getLogger(__name__)
 
 
 async def due_scheduled_posts(session: AsyncSession, limit: int = 25) -> list[dict]:
@@ -71,6 +74,7 @@ async def _mark_published(session: AsyncSession, schedule: dict, result: dict) -
         SET status = 'published',
             published_at = NOW(),
             external_post_id = :external_post_id,
+            external_post_url = :external_post_url,
             error_message = NULL
         WHERE id = :id AND user_id = :user_id
         """,
@@ -78,6 +82,7 @@ async def _mark_published(session: AsyncSession, schedule: dict, result: dict) -
             "id": schedule["id"],
             "user_id": schedule["user_id"],
             "external_post_id": result.get("message_id"),
+            "external_post_url": result.get("external_post_url"),
         },
     )
     await execute(
@@ -117,7 +122,7 @@ async def _mark_failed_or_retry(session: AsyncSession, schedule: dict, error: Te
 
 async def run_due_telegram_for_user(session: AsyncSession, user_id: str, limit: int = 25) -> dict:
     due = await due_telegram_posts_for_user(session, user_id, limit=limit)
-    result = {"processed": 0, "published": 0, "failed": 0, "skipped": 0, "dry_run": settings.telegram_dry_run}
+    result = {"processed": 0, "published": 0, "failed": 0, "skipped": 0, "dry_run": settings.telegram_dry_run, "simulated": 0}
     for schedule in due:
         result["processed"] += 1
         locked = await _mark_publishing(session, user_id, str(schedule["id"]))
@@ -145,11 +150,15 @@ async def run_due_telegram_for_user(session: AsyncSession, user_id: str, limit: 
                     "status": "published",
                     "method": publish_result.get("method"),
                     "message_id": publish_result.get("message_id"),
+                    "external_post_url": publish_result.get("external_post_url"),
                     "dry_run": publish_result.get("dry_run"),
+                    "simulated": publish_result.get("simulated"),
                 },
                 status="completed",
             )
             result["published"] += 1
+            if publish_result.get("simulated"):
+                result["simulated"] += 1
         except TelegramPublishError as exc:
             next_status = await _mark_failed_or_retry(session, schedule, exc)
             await save_generation_run(
@@ -172,4 +181,25 @@ async def run_due_telegram_for_user(session: AsyncSession, user_id: str, limit: 
                 result["failed"] += 1
             else:
                 result["skipped"] += 1
+        except Exception as exc:
+            logger.exception("Unexpected Telegram publishing error for schedule %s", schedule.get("id"))
+            safe_error = TelegramPublishError(sanitize_telegram_error(exc) or "Unexpected Telegram publishing error", transient=False)
+            await _mark_failed_or_retry(session, schedule, safe_error)
+            await save_generation_run(
+                session,
+                user_id=user_id,
+                run_type="telegram_publish",
+                provider="telegram",
+                agent_name="publisher_worker",
+                input_payload={
+                    "schedule_id": str(schedule["id"]),
+                    "generated_post_id": str(schedule["generated_post_id"]),
+                    "platform": schedule["platform"],
+                    "dry_run": settings.telegram_dry_run,
+                },
+                output_payload={"schedule_id": str(schedule["id"]), "status": "failed"},
+                status="failed",
+                error_message=sanitize_telegram_error(safe_error),
+            )
+            result["failed"] += 1
     return result

@@ -466,6 +466,7 @@ export default function GeneratedPostsPage() {
   function renderVisual(post: GeneratedPost) {
     const visualText = safeGeneratedText(post.selected_asset?.image_prompt, t('visual.empty'));
     const visualSearch = safeGeneratedText(post.selected_asset?.search_query, '');
+    const providerMissing = post.selected_asset?.metadata?.provider_configured === false;
     return (
       <div className="post-visual-panel">
         {post.selected_asset?.preview_url ? (
@@ -479,6 +480,8 @@ export default function GeneratedPostsPage() {
         <div className="post-visual-meta">
           <span>{t('visual.provider')}: {post.selected_asset?.provider || '-'}</span>
           {visualSearch ? <span>{t('visual.searchQuery')}: {visualSearch}</span> : null}
+          {providerMissing ? <span>{t('visual.providerNotConfigured')}</span> : null}
+          {post.selected_asset?.source_url ? <a className="inline-link" href={post.selected_asset.source_url} target="_blank" rel="noreferrer">{t('visual.source')}</a> : null}
         </div>
       </div>
     );
@@ -504,6 +507,7 @@ export default function GeneratedPostsPage() {
           <div className="section-title">{t('publisher.result')}</div>
           <p className="muted-text">
             {t('publisher.processed')}: {publisherResult.processed} / {t('publisher.published')}: {publisherResult.published} / {t('publisher.failed')}: {publisherResult.failed} / {t('publisher.skipped')}: {publisherResult.skipped}
+            {publisherResult.simulated !== undefined ? <> / {t('publisher.simulatedCount')}: {publisherResult.simulated}</> : null}
           </p>
           <div className="status-pill">{publisherResult.dry_run ? t('publisher.dryRunSimulated') : t('publisher.dryRunOff')}</div>
         </div>
@@ -547,8 +551,10 @@ export default function GeneratedPostsPage() {
                     <div className="mini-info-card">
                       <div className="section-label">{t('schedule.active')}</div>
                       <b>{latestSchedule.platform} / {formatLocalDateTime(latestSchedule.scheduled_for)}</b>
+                      <span>{status(latestSchedule.status)}</span>
                       {latestSchedule.external_post_id?.startsWith('dry-run-') ? <span>{t('publisher.simulated')}: {latestSchedule.external_post_id}</span> : null}
                       {latestSchedule.social_account ? <span>{t('schedule.destination')}: {latestSchedule.social_account.display_name}</span> : null}
+                      {latestSchedule.external_post_url ? <a className="inline-link" href={latestSchedule.external_post_url} target="_blank" rel="noreferrer">{t('publisher.externalUrl')}</a> : null}
                       {latestSchedule.error_message ? <span className="danger-text">{latestSchedule.error_message}</span> : null}
                     </div>
                   ) : null}

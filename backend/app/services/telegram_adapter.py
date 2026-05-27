@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -43,6 +44,19 @@ def _telegram_url(method: str) -> str:
     return f"{base}/bot{settings.telegram_bot_token}/{method}"
 
 
+def _friendly_telegram_error(description: str) -> str:
+    lowered = description.lower()
+    if "chat not found" in lowered:
+        return "Telegram destination was not found. Check the chat ID or @channel and make sure the bot was added."
+    if "not enough rights" in lowered or "not an administrator" in lowered or "need administrator" in lowered:
+        return "Telegram bot does not have permission to publish. Add the bot as an admin with posting rights."
+    if "bot was blocked" in lowered or "bot is not a member" in lowered or "user is deactivated" in lowered:
+        return "Telegram bot cannot access this chat. Add the bot to the chat/channel and allow it to post."
+    if "wrong file identifier" in lowered or "failed to get http url content" in lowered:
+        return "Telegram could not use the selected visual URL. The post can still be sent as text."
+    return description
+
+
 def _is_transient_status(status_code: int) -> bool:
     return status_code == 429 or 500 <= status_code < 600
 
@@ -52,7 +66,7 @@ def _extract_error(response: requests.Response) -> TelegramPublishError:
         payload = response.json()
     except Exception:
         payload = {}
-    description = payload.get("description") or response.reason or "Telegram request failed"
+    description = _friendly_telegram_error(str(payload.get("description") or response.reason or "Telegram request failed"))
     return TelegramPublishError(sanitize_telegram_error(description), transient=_is_transient_status(response.status_code))
 
 
@@ -78,17 +92,38 @@ def _message_id(result: dict[str, Any]) -> str | None:
     return str(message_id) if message_id is not None else None
 
 
+def _normalize_t_me_url(value: str) -> str | None:
+    parsed = urlparse(value.strip())
+    if parsed.netloc.lower() not in {"t.me", "www.t.me"}:
+        return None
+    slug = parsed.path.strip("/").split("/", 1)[0].strip()
+    if not slug or slug.startswith("+") or slug.lower() == "joinchat":
+        raise TelegramPublishError(
+            "Telegram invite links cannot be used for publishing. Use a public @channel username or numeric chat ID.",
+            transient=False,
+        )
+    return slug if slug.startswith("@") or slug.startswith("-") else f"@{slug}"
+
+
 def _target_chat(schedule: dict[str, Any]) -> str | None:
     account = schedule.get("social_account") or {}
     external_id = (account.get("external_account_id") or "").strip()
     if external_id:
+        if "t.me/" in external_id:
+            return _normalize_t_me_url(external_id)
+        if any(char.isspace() for char in external_id):
+            raise TelegramPublishError("Telegram chat ID or @channel must not contain spaces.", transient=False)
         return external_id
     account_url = (account.get("account_url") or "").strip()
     if "t.me/" in account_url:
-        slug = account_url.rstrip("/").rsplit("/", 1)[-1].strip()
-        if slug:
-            return slug if slug.startswith("@") or slug.startswith("-") else f"@{slug}"
+        return _normalize_t_me_url(account_url)
     return None
+
+
+def _external_post_url(chat_id: str, message_id: str | None) -> str | None:
+    if not message_id or not chat_id.startswith("@"):
+        return None
+    return f"https://t.me/{chat_id.lstrip('@')}/{message_id}"
 
 
 class TelegramAdapter:
@@ -106,11 +141,15 @@ class TelegramAdapter:
         preview_url = (asset.get("preview_url") or "").strip()
 
         if settings.telegram_dry_run:
+            message_id = f"dry-run-{schedule.get('id')}"
             return {
                 "dry_run": True,
+                "simulated": True,
                 "method": "sendPhoto" if preview_url else "sendMessage",
-                "message_id": f"dry-run-{schedule.get('id')}",
+                "message_id": message_id,
+                "external_post_url": None,
                 "used_photo": bool(preview_url),
+                "message": "Dry-run: Telegram API was not called.",
             }
 
         if preview_url:
@@ -121,13 +160,29 @@ class TelegramAdapter:
                     "caption": _truncate(text, TELEGRAM_CAPTION_LIMIT),
                 }
                 data = await asyncio.to_thread(_post_telegram, "sendPhoto", photo_payload)
-                return {"dry_run": False, "method": "sendPhoto", "message_id": _message_id(data), "used_photo": True}
+                message_id = _message_id(data)
+                return {
+                    "dry_run": False,
+                    "simulated": False,
+                    "method": "sendPhoto",
+                    "message_id": message_id,
+                    "external_post_url": _external_post_url(chat_id, message_id),
+                    "used_photo": True,
+                }
             except TelegramPublishError as exc:
                 exc.photo_failed = True
 
         message_payload = {"chat_id": chat_id, "text": _truncate(text, TELEGRAM_MESSAGE_LIMIT)}
         data = await asyncio.to_thread(_post_telegram, "sendMessage", message_payload)
-        return {"dry_run": False, "method": "sendMessage", "message_id": _message_id(data), "used_photo": False}
+        message_id = _message_id(data)
+        return {
+            "dry_run": False,
+            "simulated": False,
+            "method": "sendMessage",
+            "message_id": message_id,
+            "external_post_url": _external_post_url(chat_id, message_id),
+            "used_photo": False,
+        }
 
 
 telegram_adapter = TelegramAdapter()
