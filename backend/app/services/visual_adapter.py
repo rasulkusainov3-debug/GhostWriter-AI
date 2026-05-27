@@ -89,7 +89,47 @@ class VisualAdapter:
             if secret:
                 text = text.replace(secret, "[redacted]")
         return text[:500]
+    def _normalize_url(self, url: str | None) -> str | None:
+        if not url:
+            return None
+        value = str(url).strip()
+        value = value.split("?")[0]
+        value = value.rstrip("/")
+        return value or None
+    
+    def _is_excluded(
+        self,
+        provider_asset_id: Any,
+        preview_url: str | None,
+        source_url: str | None,
+        exclude_urls: set[str] | None = None,
+        exclude_ids: set[str] | None = None,
+    ) -> bool:
+        exclude_urls = exclude_urls or set()
+        exclude_ids = exclude_ids or set()
 
+        normalized_exclude_urls = {
+            normalized
+            for url in exclude_urls
+            for normalized in [self._normalize_url(url)]
+            if normalized
+        }
+
+        if provider_asset_id and str(provider_asset_id) in exclude_ids:
+            return True
+
+        for url in (preview_url, source_url):
+            if not url:
+                continue
+
+            if url in exclude_urls:
+                return True
+
+            normalized_url = self._normalize_url(url)
+            if normalized_url and normalized_url in normalized_exclude_urls:
+                return True
+
+        return False
     def _template_result(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any]:
         query = self._template_query(post, profile)
         platform = post.get("platform") or "social media"
@@ -114,73 +154,106 @@ class VisualAdapter:
             "metadata": metadata,
         }
 
-    def _pexels_search(self, query: str) -> dict[str, Any] | None:
+    def _pexels_search(
+        self,
+        query: str,
+        exclude_urls: set[str] | None = None,
+        exclude_ids: set[str] | None = None,
+    ) -> dict[str, Any] | None:
         if not settings.pexels_api_key:
             return None
+
         response = requests.get(
             "https://api.pexels.com/v1/search",
-            params={"query": query, "per_page": 5, "orientation": "landscape"},
+            params={"query": query, "per_page": 12, "orientation": "landscape"},
             headers={"Authorization": settings.pexels_api_key},
             timeout=12,
         )
         response.raise_for_status()
         photos = response.json().get("photos") or []
-        if not photos:
-            return None
-        photo = photos[0]
-        src = photo.get("src") or {}
-        preview_url = src.get("large") or src.get("medium") or src.get("original")
-        if not preview_url:
-            return None
-        return {
-            "asset_type": "image",
-            "provider": "pexels",
-            "status": "selected",
-            "image_prompt": None,
-            "search_query": query,
-            "preview_url": preview_url,
-            "source_url": photo.get("url"),
-            "author": photo.get("photographer"),
-            "alt_text": photo.get("alt") or query,
-            "metadata": {"pexels_id": photo.get("id"), "photographer_url": photo.get("photographer_url")},
-        }
 
-    def _unsplash_search(self, query: str) -> dict[str, Any] | None:
+        for photo in photos:
+            src = photo.get("src") or {}
+            preview_url = src.get("large") or src.get("medium") or src.get("original")
+            source_url = photo.get("url")
+            provider_asset_id = photo.get("id")
+
+            if not preview_url:
+                continue
+
+            if self._is_excluded(provider_asset_id, preview_url, source_url, exclude_urls, exclude_ids):
+                continue
+
+            return {
+                "asset_type": "image",
+                "provider": "pexels",
+                "status": "selected",
+                "image_prompt": None,
+                "search_query": query,
+                "preview_url": preview_url,
+                "source_url": source_url,
+                "author": photo.get("photographer"),
+                "alt_text": photo.get("alt") or query,
+                "metadata": {
+                    "pexels_id": provider_asset_id,
+                    "provider_asset_id": str(provider_asset_id) if provider_asset_id else None,
+                    "photographer_url": photo.get("photographer_url"),
+                },
+            }
+
+        return None
+
+    def _unsplash_search(
+        self,
+        query: str,
+        exclude_urls: set[str] | None = None,
+        exclude_ids: set[str] | None = None,
+    ) -> dict[str, Any] | None:
         if not settings.unsplash_access_key:
             return None
+
         response = requests.get(
             "https://api.unsplash.com/search/photos",
-            params={"query": query, "per_page": 5, "orientation": "landscape", "content_filter": "high"},
+            params={"query": query, "per_page": 12, "orientation": "landscape", "content_filter": "high"},
             headers={"Authorization": f"Client-ID {settings.unsplash_access_key}", "Accept-Version": "v1"},
             timeout=12,
         )
         response.raise_for_status()
         results = response.json().get("results") or []
-        if not results:
-            return None
-        image = results[0]
-        urls = image.get("urls") or {}
-        user = image.get("user") or {}
-        links = image.get("links") or {}
-        preview_url = urls.get("regular") or urls.get("small") or urls.get("thumb")
-        if not preview_url:
-            return None
-        return {
-            "asset_type": "image",
-            "provider": "unsplash",
-            "status": "selected",
-            "image_prompt": None,
-            "search_query": query,
-            "preview_url": preview_url,
-            "source_url": links.get("html"),
-            "author": user.get("name") or user.get("username"),
-            "alt_text": image.get("alt_description") or image.get("description") or query,
-            "metadata": {
-                "unsplash_id": image.get("id"),
-                "author_url": (user.get("links") or {}).get("html"),
-                "provider": "unsplash_search",
-            },
-        }
+
+        for image in results:
+            urls = image.get("urls") or {}
+            user = image.get("user") or {}
+            links = image.get("links") or {}
+            preview_url = urls.get("regular") or urls.get("small") or urls.get("thumb")
+            source_url = links.get("html")
+            provider_asset_id = image.get("id")
+
+            if not preview_url:
+                continue
+
+            if self._is_excluded(provider_asset_id, preview_url, source_url, exclude_urls, exclude_ids):
+                continue
+
+            return {
+                "asset_type": "image",
+                "provider": "unsplash",
+                "status": "selected",
+                "image_prompt": None,
+                "search_query": query,
+                "preview_url": preview_url,
+                "source_url": source_url,
+                "author": user.get("name") or user.get("username"),
+                "alt_text": image.get("alt_description") or image.get("description") or query,
+                "metadata": {
+                    "unsplash_id": provider_asset_id,
+                    "provider_asset_id": str(provider_asset_id) if provider_asset_id else None,
+                    "author_url": (user.get("links") or {}).get("html"),
+                    "provider": "unsplash_search",
+                },
+            }
+
+        return None
 
     def _agent2_unsplash(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any] | None:
         if not (settings.gemini_api_key and settings.unsplash_access_key and self.root.exists()):
@@ -248,14 +321,14 @@ class VisualAdapter:
             "metadata": {"fallback": "llm"},
         }
 
-    async def generate_visual(self, post: dict[str, Any], profile: dict[str, Any] | None) -> dict[str, Any]:
+    async def generate_visual(self,post: dict[str, Any],profile: dict[str, Any] | None,exclude_urls: set[str] | None = None,exclude_ids: set[str] | None = None, ) -> dict[str, Any]:
         errors: list[str] = []
         provider = settings.visual_provider.lower().strip()
         query = self._search_query(post, profile)
 
         if provider == "pexels":
             try:
-                pexels = self._pexels_search(query)
+                pexels = self._pexels_search(query, exclude_urls=exclude_urls, exclude_ids=exclude_ids)
                 if pexels:
                     return pexels
             except Exception as exc:
@@ -263,7 +336,7 @@ class VisualAdapter:
 
         if provider != "pexels":
             try:
-                unsplash = self._unsplash_search(query)
+                unsplash = self._unsplash_search(query, exclude_urls=exclude_urls, exclude_ids=exclude_ids)
                 if unsplash:
                     return unsplash
             except Exception as exc:
@@ -278,7 +351,7 @@ class VisualAdapter:
 
         if provider != "pexels":
             try:
-                pexels = self._pexels_search(query)
+                pexels = self._pexels_search(query, exclude_urls=exclude_urls, exclude_ids=exclude_ids)
                 if pexels:
                     return pexels
             except Exception as exc:
@@ -286,7 +359,7 @@ class VisualAdapter:
 
         if provider == "pexels":
             try:
-                unsplash = self._unsplash_search(query)
+                unsplash = self._unsplash_search(query, exclude_urls=exclude_urls, exclude_ids=exclude_ids)
                 if unsplash:
                     return unsplash
             except Exception as exc:

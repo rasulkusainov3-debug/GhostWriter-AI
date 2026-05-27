@@ -119,8 +119,59 @@ async def _insert_asset(session: AsyncSession, user_id: str, post_id: str, visua
 async def generate_visual_for_post(session: AsyncSession, user_id: str, post_id: str) -> dict[str, Any]:
     post = await _owned_post(session, user_id, post_id)
     profile = await fetch_one(session, "SELECT * FROM user_profiles WHERE user_id = :user_id", {"user_id": user_id})
+
+    existing_assets = await fetch_all(
+        session,
+        """
+        SELECT provider, preview_url, source_url, metadata
+        FROM post_assets
+        WHERE post_id = :post_id AND user_id = :user_id
+        """,
+        {"post_id": post_id, "user_id": user_id},
+    )
+
+    exclude_urls = {
+        url
+        for asset in existing_assets
+        for url in [asset.get("preview_url"), asset.get("source_url")]
+        if url
+    }
+
+    exclude_ids = set()
+    for asset in existing_assets:
+        metadata = asset.get("metadata") or {}
+
+        if isinstance(metadata, dict):
+            for key in ("provider_asset_id", "pexels_id", "unsplash_id", "id"):
+                value = metadata.get(key)
+                if value:
+                    exclude_ids.add(str(value))
+
+            raw = metadata.get("raw")
+            if isinstance(raw, dict):
+                for key in ("id", "pexels_id", "unsplash_id"):
+                    value = raw.get(key)
+                    if value:
+                        exclude_ids.add(str(value))
+
     try:
-        visual = await visual_adapter.generate_visual(post, profile)
+        print("VISUAL EXCLUDE URLS:", exclude_urls)
+        print("VISUAL EXCLUDE IDS:", exclude_ids)
+        visual = await visual_adapter.generate_visual(
+            post,
+            profile,
+            exclude_urls=exclude_urls,
+            exclude_ids=exclude_ids,
+        )
+
+        new_preview = visual.get("preview_url")
+        new_source = visual.get("source_url")
+
+        if new_preview and new_preview in exclude_urls:
+            raise HTTPException(status_code=409, detail="Visual provider returned a duplicate preview image. Try again.")
+        if new_source and new_source in exclude_urls:
+            raise HTTPException(status_code=409, detail="Visual provider returned a duplicate source image. Try again.")
+
         asset = await _insert_asset(session, user_id, post_id, visual, select=True)
         await save_generation_run(
             session,
@@ -128,8 +179,19 @@ async def generate_visual_for_post(session: AsyncSession, user_id: str, post_id:
             run_type="post_visual_generation",
             provider=asset.get("provider"),
             agent_name="social_analyzer.agent2_beautify_adapter",
-            input_payload={"post_id": post_id, "platform": post.get("platform"), "trend_topic": post.get("trend_topic")},
-            output_payload={"asset_id": str(asset.get("id")), "status": asset.get("status"), "provider": asset.get("provider")},
+            input_payload={
+                "post_id": post_id,
+                "platform": post.get("platform"),
+                "trend_topic": post.get("trend_topic"),
+                "excluded_assets": len(existing_assets),
+            },
+            output_payload={
+                "asset_id": str(asset.get("id")),
+                "status": asset.get("status"),
+                "provider": asset.get("provider"),
+                "preview_url": asset.get("preview_url"),
+                "source_url": asset.get("source_url"),
+            },
             status="completed",
         )
         return {"asset": asset, "post": await enrich_generated_post(session, user_id, post)}
