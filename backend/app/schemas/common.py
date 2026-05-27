@@ -87,12 +87,14 @@ class GeneratePostsRequest(BaseModel):
     use_llm: bool = False
     item_ids: list[UUID] | None = None
     mode: str = "regenerate_full"
+    language: str | None = None
 
 
 class GeneratePostFromTrendRequest(BaseModel):
     use_llm: bool = True
     platform: str | None = None
     format: str | None = None
+    language: str | None = None
 
 
 class GeneratedPostUpdate(BaseModel):

@@ -95,6 +95,7 @@ export default function GeneratedPostsPage() {
   const [publisherResult, setPublisherResult] = useState<PublisherRunResult | null>(null);
   const [publisherRunning, setPublisherRunning] = useState(false);
   const [error, setError] = useState('');
+  const [postLanguage, setPostLanguage] = useState<'ru' | 'en' | 'kz'>('ru');
 
   async function load() {
     setError('');
@@ -173,7 +174,14 @@ export default function GeneratedPostsPage() {
     setSavingId(post.id);
     setError('');
     try {
-      const updated = await api<GeneratedPost>(`/api/generated-posts/${post.id}/regenerate`, { method: 'POST', body: JSON.stringify({ use_llm: true, mode }) });
+      const updated = await api<GeneratedPost>(`/api/generated-posts/${post.id}/regenerate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          use_llm: true,
+          mode,
+          language: postLanguage,
+        }),
+      });
       replacePost(updated);
     } catch (err) {
       setError(errorMessage(err, t('common.actionError')));
@@ -574,15 +582,15 @@ export default function GeneratedPostsPage() {
                 </aside>
                 <section className="post-editor-panel">
                   {(invalidDraft || invalidFinal) ? (
-                    <div className="chat-warning">
-                      {t('posts.invalidGeneratedText')}
-                      <div className="toolbar-actions mt-3">
-                        <button className="secondary-button text-xs" onClick={() => regenerate(post, 'regenerate_full')} disabled={savingId === post.id}>
-                          <RefreshCcw size={14} /> {t('posts.regenerateFull')}
-                        </button>
+                      <div className="chat-warning">
+                        {t('posts.invalidGeneratedText')}
+                        <div className="toolbar-actions mt-3">
+                          <button className="secondary-button text-xs" onClick={() => regenerate(post, 'regenerate_full')} disabled={savingId === post.id}>
+                            <RefreshCcw size={14} /> {t('posts.regenerateFull')}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
+                    ) : null}
                   <label className="form-label">
                     {t('posts.draftText')}
                     <span className="field-help">{t('posts.draftHelp')}</span>
@@ -609,8 +617,30 @@ export default function GeneratedPostsPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="regeneration-toolbar">
-                    <button className="secondary-button text-xs" onClick={() => regenerate(post, 'regenerate_full')} disabled={savingId === post.id}><RefreshCcw size={14} /> {t('posts.regenerateFull')}</button>
+                 <div className="regeneration-toolbar">
+                  <select
+                    value={postLanguage}
+                    onChange={(event) => setPostLanguage(event.target.value as 'ru' | 'en' | 'kz')}
+                    style={{
+                      minWidth: 130,
+                      padding: '7px 10px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.25)',
+                      background: '#1f2727',
+                      color: 'white',
+                      fontWeight: 700,
+                      fontSize: 12,
+                    }}
+                    title="Язык поста"
+                  >
+                    <option value="ru">Русский</option>
+                    <option value="en">English</option>
+                    <option value="kz">Қазақша</option>
+                  </select>
+
+                  <button className="secondary-button text-xs" onClick={() => regenerate(post, 'regenerate_full')} disabled={savingId === post.id}>
+                    <RefreshCcw size={14} /> {t('posts.regenerateFull')}
+                  </button>
                     <button className="secondary-button text-xs" onClick={() => regenerate(post, 'improve_current')} disabled={savingId === post.id}>{t('posts.improveFinal')}</button>
                     <button className="secondary-button text-xs" onClick={() => regenerate(post, 'shorter')} disabled={savingId === post.id}>{t('posts.makeShorter')}</button>
                     <button className="secondary-button text-xs" onClick={() => regenerate(post, 'more_expert')} disabled={savingId === post.id}>{t('posts.makeExpert')}</button>

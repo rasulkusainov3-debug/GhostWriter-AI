@@ -18,6 +18,16 @@ from app.services.trend_service import active_trends
 
 ALLOWED_POST_STATUSES = {"draft", "edited", "approved", "rejected", "scheduled", "published"}
 
+def normalize_post_language(value: str | None) -> str:
+    text = (value or "").strip().lower()
+
+    if text in {"en", "english", "английский", "на английском", "in english"}:
+        return "en"
+
+    if text in {"kz", "kk", "kazakh", "казахский", "на казахском", "қазақша"}:
+        return "kz"
+
+    return "ru"
 
 def _trend_slot_from_message(message: str) -> int | None:
     match = re.search(r"(?:втор|2|second)", message.lower())
@@ -30,6 +40,7 @@ def _trend_slot_from_message(message: str) -> int | None:
     if match:
         return 2
     return None
+
 
 
 def _slot_from_trend(trend: dict[str, Any], profile: dict[str, Any], message: str) -> dict[str, Any]:
@@ -58,6 +69,7 @@ async def generate_posts_for_plan(
     plan_id: str,
     use_llm: bool = True,
     item_ids: set[str] | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
     items = await fetch_all(
         session,
@@ -75,6 +87,7 @@ async def generate_posts_for_plan(
         items = [item for item in items if str(item["id"]) in item_ids]
     created = []
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
+    post_language = normalize_post_language(language)
     personality_brief = await build_personality_brief(session, user_id)
     generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
     for item in items:
@@ -85,6 +98,8 @@ async def generate_posts_for_plan(
             "platform": item["platform"],
             "format": item["format"],
             "post_idea": item["post_idea"],
+            "language": post_language,
+
             "trend": {
                 "id": item["trend_id"],
                 "topic": item.get("trend_topic"),
@@ -94,7 +109,13 @@ async def generate_posts_for_plan(
             "analytics_feedback": analytics_feedback,
             "personality_brief": personality_brief,
         }
-        generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
+        generated = await post_generator_adapter.generate_post_async(
+            slot,
+            generator_profile,
+            use_llm=use_llm,
+            mode="create",
+            language=post_language,
+        )
         post = await fetch_one(
             session,
             """
@@ -126,6 +147,7 @@ async def generate_posts_for_plan(
             "item_ids": list(item_ids) if item_ids else None,
             "use_llm": use_llm,
             "mode": "create",
+            "language": post_language,
             "analytics_context_summary": {
                 "data_quality": analytics_context.get("data_quality"),
                 "metrics_rows": analytics_context.get("metrics_rows"),
@@ -149,15 +171,14 @@ async def generate_posts_for_plan(
     )
     return {"created": created}
 
-
-async def generate_from_latest_plan(session: AsyncSession, user_id: str, profile: dict[str, Any], use_llm: bool = True) -> dict[str, Any]:
+async def generate_from_latest_plan(session: AsyncSession,user_id: str,profile: dict[str, Any],use_llm: bool = True,language: str | None = None,) -> dict[str, Any]:
     plan = await latest_content_plan(session, user_id)
     if not plan:
         raise HTTPException(status_code=409, detail="No content plan found. Create a content plan first.")
-    return await generate_posts_for_plan(session, user_id, profile, str(plan["plan"]["id"]), use_llm=use_llm)
+    return await generate_posts_for_plan(session,user_id,profile,str(plan["plan"]["id"]),use_llm=use_llm,language=language,)
 
 
-async def generate_post_from_trend_message(session: AsyncSession, user_id: str, profile: dict[str, Any], message: str, use_llm: bool = True) -> dict[str, Any]:
+async def generate_post_from_trend_message(session: AsyncSession,user_id: str,profile: dict[str, Any],message: str,use_llm: bool = True,language: str | None = None,) -> dict[str, Any]:
     trends = await active_trends(session, user_id, limit=10)
     if not trends:
         raise HTTPException(status_code=409, detail="No active trends available. Find new trends first.")
@@ -166,12 +187,20 @@ async def generate_post_from_trend_message(session: AsyncSession, user_id: str, 
         raise HTTPException(status_code=409, detail="Selected trend was not found. Ask to show current trends.")
     trend = trends[index]
     slot = _slot_from_trend(trend, profile, message)
+    post_language = normalize_post_language(language)
+    slot["language"] = post_language
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
     slot["analytics_feedback"] = analytics_feedback
     personality_brief = await build_personality_brief(session, user_id)
     slot["personality_brief"] = personality_brief
     generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
-    generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
+    generated = await post_generator_adapter.generate_post_async(
+        slot,
+        generator_profile,
+        use_llm=use_llm,
+        mode="create",
+        language=post_language,
+    )
     post = await fetch_one(
         session,
         """
@@ -200,6 +229,7 @@ async def generate_post_from_trend_message(session: AsyncSession, user_id: str, 
             "message": message,
             "use_llm": use_llm,
             "mode": "create",
+            "language": post_language,
             "analytics_context_summary": {
                 "data_quality": analytics_context.get("data_quality"),
                 "metrics_rows": analytics_context.get("metrics_rows"),
@@ -231,6 +261,7 @@ async def generate_post_from_trend_id(
     platform: str | None = None,
     format: str | None = None,
     use_llm: bool = True,
+    language: str | None = None,
 ) -> dict[str, Any]:
     trend = await fetch_one(
         session,
@@ -244,12 +275,20 @@ async def generate_post_from_trend_id(
         slot["platform"] = platform
     if format:
         slot["format"] = format
+    post_language = normalize_post_language(language)
+    slot["language"] = post_language
     analytics_context, analytics_feedback = await _feedback_payload(session, user_id, profile)
     slot["analytics_feedback"] = analytics_feedback
     personality_brief = await build_personality_brief(session, user_id)
     slot["personality_brief"] = personality_brief
     generator_profile = merge_personality_with_profile({**profile, "analytics_feedback": analytics_feedback}, personality_brief)
-    generated = await post_generator_adapter.generate_post_async(slot, generator_profile, use_llm=use_llm, mode="create")
+    generated = await post_generator_adapter.generate_post_async(
+        slot,
+        generator_profile,
+        use_llm=use_llm,
+        mode="create",
+        language=post_language,
+    )
     post = await fetch_one(
         session,
         """
@@ -280,6 +319,7 @@ async def generate_post_from_trend_id(
             "format": slot["format"],
             "use_llm": use_llm,
             "mode": "create",
+            "language": post_language,
             "analytics_context_summary": {
                 "data_quality": analytics_context.get("data_quality"),
                 "metrics_rows": analytics_context.get("metrics_rows"),
@@ -310,8 +350,10 @@ async def regenerate_post(
     profile: dict[str, Any],
     use_llm: bool = True,
     mode: str = "regenerate_full",
+    language: str | None = None,
 ) -> dict[str, Any]:
     mode = normalize_generation_mode(mode)
+    post_language = normalize_post_language(language)
     post = await fetch_one(session, "SELECT * FROM generated_posts WHERE id = :id AND user_id = :user_id", {"id": post_id, "user_id": user_id})
     if not post:
         raise HTTPException(status_code=404, detail="Generated post not found")
@@ -336,6 +378,7 @@ async def regenerate_post(
         }
     slot = {
         "slot_id": str(item["id"]) if item else str(post["id"]),
+        "language": post_language,
         "date": item["scheduled_date"].isoformat() if item else date.today().isoformat(),
         "time": str(item["scheduled_time"])[:5] if item else "09:00",
         "platform": post["platform"],
@@ -360,6 +403,8 @@ async def regenerate_post(
         use_llm=use_llm,
         mode=mode,
         current_text=post.get("final_text"),
+        language=post_language,
+
     )
     await execute(
         session,
@@ -381,6 +426,7 @@ async def regenerate_post(
             "post_id": post_id,
             "use_llm": use_llm,
             "mode": mode,
+            "language": post_language,
             "analytics_context_summary": {
                 "data_quality": analytics_context.get("data_quality"),
                 "metrics_rows": analytics_context.get("metrics_rows"),

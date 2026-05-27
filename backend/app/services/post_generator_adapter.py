@@ -147,7 +147,26 @@ def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: 
     preferred_structure = _list(personality.get("preferred_structure"))
     voice = _text(personality.get("voice"), brief["tone"])
     writing_style = _text(personality.get("writing_style"), "")
-    if _ru(brief):
+    selected_language = _text(slot.get("language"), "ru").lower()
+
+    if selected_language in {"kz", "kk"}:
+        return "\n".join(
+            [
+                "Жұмыс черновигі",
+                f"Тақырып: {brief['topic']}",
+                f"Аудитория: {brief['audience']}",
+                f"Мақсат: {brief['goal']}",
+                f"Автор стилі: {voice}",
+                f"Жазу стилі: {writing_style or 'қысқа абзацтар, практикалық пайда, анық қорытынды'}",
+                f"Құрылым: {', '.join(preferred_structure) if preferred_structure else 'hook, insight, example, CTA'}",
+                f"Подача бұрышы: тақырыптың практикалық пайдасын және {brief['profession']} сарапшылығын көрсету.",
+                f"Негізгі ой: {brief['summary'] or 'тақырыпты аудиторияның нақты мәселесімен байланыстыру керек.'}",
+                "Хук: аудитория танитын нақты проблемадан бастау.",
+                "CTA: пайдалы сұрақ қою немесе бір нақты келесі қадам ұсыну.",
+            ]
+        )
+
+    if selected_language == "ru" or (selected_language not in {"en", "kz", "kk"} and _ru(brief)):
         return "\n".join(
             [
                 "Рабочий черновик",
@@ -163,6 +182,7 @@ def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: 
                 "CTA: задать вопрос или предложить начать с одной измеримой задачи.",
             ]
         )
+
     return "\n".join(
         [
             "Working draft",
@@ -178,7 +198,6 @@ def build_structured_draft(slot: dict[str, Any], profile: dict[str, Any], mode: 
             "CTA: ask a useful question or suggest one measurable next step.",
         ]
     )
-
 
 def _hashtags(brief: dict[str, Any]) -> str:
     words = []
@@ -215,6 +234,9 @@ def build_fallback_social_post(
     friendly = any(marker in voice.lower() for marker in ["дружелюб", "тепл", "friendly", "warm"])
 
     ru = _ru(brief)
+    selected_language = _text(slot.get("language"), "ru").lower()
+    ru = selected_language == "ru" or (selected_language not in {"en", "kz", "kk"} and _ru(brief))
+    kz = selected_language in {"kz", "kk"}
     angle_ru = random.choice(
         [
             "через практическую пользу для бизнеса",
@@ -277,7 +299,14 @@ def build_fallback_social_post(
             f"Если цель - {goal}, такой пост должен не пересказывать новость, а показывать вашу логику: как вы думаете, выбираете решения и помогаете {audience} получить результат.\n\n"
             "С чего бы вы начали внедрение такой идеи в реальный процесс?"
         )
-
+    if kz:
+        return (
+            f"{topic}: бұл жай ғана тренд емес, нақты тәжірибе көрсетуге мүмкіндік.\n\n"
+            f"{summary or 'Бұл тақырып кәсіби аудитория үшін өзекті болып келеді.'}\n\n"
+            f"Мұнда {profession} сарапшылығы нақты көрінеді: мәселені түсіндіру, шектеулерді көрсету және {audience} үшін практикалық шешім ұсыну.\n\n"
+            f"Егер мақсат — {goal}, онда пост жаңалықты қайталау емес, сіздің ойлау тәсіліңізді және нақты құндылықты көрсетуі керек.\n\n"
+            "Сіз бұл идеяны бірінші қай процесте қолданар едіңіз?"
+        )
     if mode == "shorter" or platform == "telegram":
         example_line = (
             "Add one practical example: the starting problem, the change, and the result."
@@ -333,6 +362,8 @@ def _system_prompt() -> str:
         "Do not mention backend metadata, schemas, IDs, or data structures.\n"
         "Combine the selected platform style with the user's personality brief.\n"
         "Use style examples only as writing-pattern guidance; do not copy them.\n"
+        "Follow the selected output language from the user request.\n"
+        "The main body must be in the selected language, but brand names, platform names, technology terms, hashtags, abbreviations, code terms, and proper nouns may stay in their original language.\n"
         "Write only the final social media post for the selected platform."
     )
 
@@ -349,6 +380,34 @@ def _mode_instruction(mode: str) -> str:
         "create": "Create a ready-to-publish social media post.",
     }.get(mode, "Create a ready-to-publish social media post.")
 
+def _language_instruction(language: str | None) -> str:
+    value = (language or "ru").strip().lower()
+
+    if value in {"en", "english"}:
+        return (
+            "Main output language: English.\n"
+            "Write the post primarily in English.\n"
+            "Brand names, platform names, technology terms, hashtags, abbreviations, "
+            "code terms, and proper nouns may remain in their original language when natural."
+        )
+
+    if value in {"kz", "kk", "kazakh"}:
+        return (
+            "Main output language: Kazakh.\n"
+            "Write the post primarily in Kazakh.\n"
+            "Do not write the whole post in English or Russian.\n"
+            "Brand names, platform names, technology terms, hashtags, abbreviations, "
+            "code terms, and proper nouns may remain in their original language when natural."
+        )
+
+    return (
+        "Main output language: Russian.\n"
+        "Write the post primarily in Russian.\n"
+        "Do not write the whole post in English.\n"
+        "Brand names, platform names, technology terms, hashtags, abbreviations, "
+        "code terms, and proper nouns may remain in their original language when natural."
+    )
+    
 
 def _llm_prompt(
     slot: dict[str, Any],
@@ -356,6 +415,7 @@ def _llm_prompt(
     draft_text: str,
     mode: str,
     current_text: str | None,
+    language: str = "ru",
     stricter: bool = False,
 ) -> str:
     brief = _brief(slot, profile)
@@ -364,6 +424,8 @@ def _llm_prompt(
     vocabulary_preferences = _list(personality.get("vocabulary_preferences"))
     avoid_phrases = _list(personality.get("avoid_phrases") or brief.get("avoid_phrases"))
     examples = personality.get("examples") if isinstance(personality.get("examples"), list) else []
+    language_rule = _language_instruction(language)
+
     lines = [
         "Internal content brief:",
         f"- Platform: {brief['platform']}",
@@ -382,6 +444,12 @@ def _llm_prompt(
         f"- Preferred structure: {', '.join(preferred_structure) if preferred_structure else 'hook, insight, example, CTA'}",
         f"- Vocabulary preferences: {', '.join(vocabulary_preferences) or 'none'}",
         f"- Avoid phrases/topics: {', '.join(avoid_phrases) or 'none'}",
+        "",
+        "Output language rules:",
+        language_rule,
+        "- The selected language controls the main body language.",
+        "- Do not translate brand names, platform names, technology terms, hashtags, abbreviations, code terms, or proper nouns unnaturally.",
+        "- Output only the ready social media post.",
         "",
         f"Task: {_mode_instruction(mode)}",
         "",
@@ -452,8 +520,10 @@ class PostGeneratorAdapter:
         use_llm: bool = False,
         mode: str = "create",
         current_text: str | None = None,
+        language: str = "ru",
     ) -> dict[str, Any]:
         mode = normalize_generation_mode(mode)
+        slot = {**slot, "language": language}
         legacy_profile = self._legacy_profile(profile)
         raw_draft = _legacy_template(slot, legacy_profile)
         invalid_output_detected = looks_like_json_analysis(raw_draft)
@@ -469,11 +539,11 @@ class PostGeneratorAdapter:
         final_text = ""
         if use_llm:
             try:
-                prompt = _llm_prompt(slot, profile, draft_text, mode, current_text)
+                prompt = _llm_prompt(slot, profile, draft_text, mode, current_text, language=language)
                 candidate, provider = await generate_text_with_fallback(prompt, system_prompt=_system_prompt())
                 if looks_like_json_analysis(candidate) or _too_similar(candidate, current_text):
                     invalid_output_detected = True
-                    retry_prompt = _llm_prompt(slot, profile, draft_text, mode, current_text, stricter=True)
+                    retry_prompt = _llm_prompt(slot, profile, draft_text, mode, current_text, language=language, stricter=True)
                     candidate, provider = await generate_text_with_fallback(retry_prompt, system_prompt=_system_prompt())
                 if not looks_like_json_analysis(candidate) and not _too_similar(candidate, current_text):
                     final_text = candidate.strip()
@@ -500,6 +570,7 @@ class PostGeneratorAdapter:
         stats = {
             **stats,
             "generation_mode": mode,
+            "language": language,
             "draft_source": draft_source,
             "fallback_used": fallback_used,
             "invalid_output_detected": invalid_output_detected,
@@ -521,8 +592,10 @@ class PostGeneratorAdapter:
         use_llm: bool = False,
         mode: str = "create",
         current_text: str | None = None,
+        language: str = "ru",
     ) -> dict[str, Any]:
         mode = normalize_generation_mode(mode)
+        slot = {**slot, "language": language}
         legacy_profile = self._legacy_profile(profile)
         raw_draft = _legacy_template(slot, legacy_profile)
         invalid_output_detected = looks_like_json_analysis(raw_draft)
@@ -542,6 +615,7 @@ class PostGeneratorAdapter:
             "stats": {
                 **stats,
                 "generation_mode": mode,
+                "language": language,
                 "draft_source": draft_source,
                 "fallback_used": True,
                 "invalid_output_detected": invalid_output_detected,

@@ -29,7 +29,15 @@ async def generate_from_plan(plan_id: str, payload: GeneratePostsRequest, user: 
     if not profile:
         raise HTTPException(status_code=409, detail="Complete onboarding first")
     wanted = {str(item_id) for item_id in payload.item_ids} if payload.item_ids else None
-    result = await generate_posts_for_plan(session, str(user["id"]), profile, plan_id, use_llm=payload.use_llm, item_ids=wanted)
+    result = await generate_posts_for_plan(
+        session,
+        str(user["id"]),
+        profile,
+        plan_id,
+        use_llm=payload.use_llm,
+        item_ids=wanted,
+        language=payload.language,
+    )
     await session.commit()
     result["created"] = await enrich_generated_posts(session, str(user["id"]), result.get("created", []))
     return result
@@ -48,6 +56,7 @@ async def generate_from_trend(trend_id: int, payload: GeneratePostFromTrendReque
         platform=payload.platform,
         format=payload.format,
         use_llm=payload.use_llm,
+        language=payload.language,
     )
     await session.commit()
     result["post"] = await enrich_generated_post(session, str(user["id"]), result.get("post"))
@@ -141,6 +150,14 @@ async def regenerate_post(post_id: str, payload: GeneratePostsRequest, user: dic
     profile = await fetch_one(session, "SELECT * FROM user_profiles WHERE user_id = :user_id", {"user_id": user["id"]})
     if not profile:
         raise HTTPException(status_code=409, detail="Cannot regenerate without profile")
-    post = await regenerate_post_service(session, str(user["id"]), post_id, profile, use_llm=payload.use_llm, mode=payload.mode)
+    post = await regenerate_post_service(
+        session,
+        str(user["id"]),
+        post_id,
+        profile,
+        use_llm=payload.use_llm,
+        mode=payload.mode,
+        language=payload.language,
+    )
     await session.commit()
     return await enrich_generated_post(session, str(user["id"]), post)
