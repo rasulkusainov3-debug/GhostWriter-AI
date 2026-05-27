@@ -1,3 +1,12 @@
+export type PersonalityStyle = {
+  voice?: string;
+  writing_style?: string;
+  preferred_structure?: string[];
+  vocabulary_preferences?: string[];
+  avoid_phrases?: string[];
+  example_post_ids?: string[];
+};
+
 export type Profile = {
   id: string;
   user_id: string;
@@ -10,7 +19,8 @@ export type Profile = {
   avoid?: string;
   user_values?: string[];
   platforms?: string[];
-  raw_answers?: Record<string, unknown>;
+  raw_answers?: Record<string, unknown> & { personality?: PersonalityStyle };
+  style_examples_count?: number;
   profile_confirmation_status?: 'draft' | 'needs_confirmation' | 'confirmed';
   audience_confirmation_status?: 'draft' | 'needs_confirmation' | 'confirmed';
   profile_confirmed_at?: string | null;
