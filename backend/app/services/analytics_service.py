@@ -7,6 +7,18 @@ from app.db.session import fetch_all, fetch_one
 
 
 PROFILE_FIELDS = ["name", "niche", "profession", "goal", "tone", "audience", "avoid"]
+PROFILE_COMPLETENESS_FIELDS = [
+    "name",
+    "niche",
+    "profession",
+    "goal",
+    "tone",
+    "audience",
+    "avoid",
+    "user_values",
+    "platforms",
+    "personality",
+]
 
 
 def _as_int(value: Any) -> int:
@@ -20,17 +32,150 @@ def _rows_to_counts(rows: Iterable[dict[str, Any]], key: str = "status") -> dict
     return {str(row.get(key) or "unknown"): _as_int(row.get("count")) for row in rows}
 
 
+def _as_list(value: Any) -> list[Any]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return []
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _filled(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _profile_field_value(profile: dict[str, Any], field: str) -> Any:
+    if field == "personality":
+        return _as_dict(profile.get("raw_answers")).get("personality")
+    return profile.get(field)
+
+
+def _activity_recommendations(profile: dict[str, Any], activity: dict[str, int], missing: list[str]) -> list[str]:
+    recommendations: list[str] = []
+    raw_answers = _as_dict(profile.get("raw_answers"))
+    personality = _as_dict(raw_answers.get("personality"))
+    example_ids = _as_list(personality.get("example_post_ids"))
+    platforms = [str(item).lower() for item in _as_list(profile.get("platforms"))]
+
+    if "audience" in missing:
+        recommendations.append("Сформулируйте 2-3 типовые боли аудитории, чтобы посты точнее попадали в запрос.")
+    if "tone" in missing:
+        recommendations.append("Добавьте тон коммуникации: экспертный, дружелюбный, прямой или другой подходящий стиль.")
+    if not platforms:
+        recommendations.append("Добавьте хотя бы одну платформу публикации, например Telegram или LinkedIn.")
+    elif "linkedin" not in platforms and _filled(profile.get("goal")):
+        recommendations.append("Добавьте LinkedIn как канал для B2B-охвата, если цель связана с экспертностью или клиентами.")
+    if len(example_ids) < 2 and activity.get("generated_posts", 0) > 0:
+        recommendations.append("Добавьте 2-3 утверждённых поста как примеры стиля для более точной генерации.")
+    if activity.get("metrics_rows", 0) == 0 and activity.get("published_posts", 0) > 0:
+        recommendations.append("Добавьте ручные метрики к опубликованным постам, чтобы рекомендации стали точнее.")
+    if not recommendations:
+        recommendations.append("Профиль готов к генерации контента. Следующий шаг — сравнить темы по метрикам и усиливать лучшие форматы.")
+    return recommendations[:4]
+
+
 async def get_profile_analytics(session: AsyncSession, user_id: str) -> dict[str, Any]:
     profile = await fetch_one(session, "SELECT * FROM user_profiles WHERE user_id = :user_id", {"user_id": user_id})
     if not profile:
-        return {"completeness": 0, "missing": ["profile"], "platforms": [], "values": [], "tone": None}
-    filled = [field for field in PROFILE_FIELDS if profile.get(field)]
-    missing = [field for field in PROFILE_FIELDS if not profile.get(field)]
+        return {
+            "completeness": 0,
+            "missing": ["profile"],
+            "profile": None,
+            "style": {},
+            "platforms": [],
+            "values": [],
+            "tone": None,
+            "activity": {
+                "active_trends": 0,
+                "generated_posts": 0,
+                "selected_visuals": 0,
+                "published_posts": 0,
+                "metrics_rows": 0,
+            },
+            "recommendations": ["Заполните профиль, чтобы аналитика могла оценить готовность к генерации контента."],
+        }
+
+    raw_answers = _as_dict(profile.get("raw_answers"))
+    personality = _as_dict(raw_answers.get("personality"))
+    filled = [field for field in PROFILE_COMPLETENESS_FIELDS if _filled(_profile_field_value(profile, field))]
+    missing = [field for field in PROFILE_COMPLETENESS_FIELDS if field not in filled]
+    active_trends = await fetch_one(
+        session,
+        "SELECT COUNT(*) AS count FROM trends WHERE user_id = :user_id AND expires_at > NOW()",
+        {"user_id": user_id},
+    )
+    generated_posts = await fetch_one(
+        session,
+        "SELECT COUNT(*) AS count FROM generated_posts WHERE user_id = :user_id",
+        {"user_id": user_id},
+    )
+    selected_visuals = await fetch_one(
+        session,
+        "SELECT COUNT(*) AS count FROM post_assets WHERE user_id = :user_id AND is_selected = true",
+        {"user_id": user_id},
+    )
+    published_posts = await fetch_one(
+        session,
+        """
+        SELECT COUNT(*) AS count
+        FROM scheduled_posts
+        WHERE user_id = :user_id AND status = 'published'
+        """,
+        {"user_id": user_id},
+    )
+    metrics_rows = await fetch_one(
+        session,
+        "SELECT COUNT(*) AS count FROM post_metrics WHERE user_id = :user_id",
+        {"user_id": user_id},
+    )
+    activity = {
+        "active_trends": _as_int((active_trends or {}).get("count")),
+        "generated_posts": _as_int((generated_posts or {}).get("count")),
+        "selected_visuals": _as_int((selected_visuals or {}).get("count")),
+        "published_posts": _as_int((published_posts or {}).get("count")),
+        "metrics_rows": _as_int((metrics_rows or {}).get("count")),
+    }
+    profile_payload = {
+        "name": profile.get("name"),
+        "niche": profile.get("niche"),
+        "profession": profile.get("profession"),
+        "goal": profile.get("goal"),
+        "tone": profile.get("tone"),
+        "audience": profile.get("audience"),
+        "avoid": profile.get("avoid"),
+        "user_values": _as_list(profile.get("user_values")),
+        "platforms": _as_list(profile.get("platforms")),
+    }
     return {
-        "completeness": round(len(filled) / len(PROFILE_FIELDS) * 100),
+        "completeness": round(len(filled) / len(PROFILE_COMPLETENESS_FIELDS) * 100),
         "missing": missing,
-        "platforms": profile.get("platforms") or [],
-        "values": profile.get("user_values") or [],
+        "profile": profile_payload,
+        "style": {
+            "voice": personality.get("voice") or profile.get("tone"),
+            "writing_style": personality.get("writing_style"),
+            "preferred_structure": _as_list(personality.get("preferred_structure")),
+            "vocabulary_preferences": _as_list(personality.get("vocabulary_preferences")),
+            "avoid_phrases": _as_list(personality.get("avoid_phrases")),
+            "example_post_ids": _as_list(personality.get("example_post_ids")),
+        },
+        "activity": activity,
+        "recommendations": _activity_recommendations(profile, activity, missing),
+        "platforms": profile_payload["platforms"],
+        "values": profile_payload["user_values"],
         "tone": profile.get("tone"),
     }
 

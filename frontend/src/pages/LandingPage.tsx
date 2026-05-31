@@ -6,6 +6,8 @@ import {
   CalendarCheck,
   Camera,
   CheckCircle2,
+  Flame,
+  Globe2,
   Layers3,
   LogIn,
   MessageSquareText,
@@ -23,11 +25,57 @@ import { useI18n } from '../lib/i18n';
 const featureIcons = [UserRound, Search, Layers3, MessageSquareText, Camera, BarChart3];
 const stepIcons = [UserRound, Search, Sparkles, CalendarCheck];
 
+const previewCopy = {
+  ru: {
+    metrics: ['Заполненность профиля', 'Активные тренды', 'Соцаккаунты', 'Главный тренд'],
+    profileTitle: 'Профиль готов к генерации',
+    profileSummary: 'Python-разработчик · IT · найти клиентов',
+    profileMeta: 'Аудитория: IT-компании и технические руководители',
+    styleTitle: 'Посты в индивидуальном стиле',
+    styleFlow: 'Hook -> insight -> case -> CTA',
+    socialTitle: 'Платформы и публикации',
+    sourceTitle: 'Карта источников',
+    chartTitle: 'Публикации и аналитика',
+    published: 'Опубликовано',
+    scheduled: 'Запланировано',
+    cancelled: 'Отменено',
+  },
+  en: {
+    metrics: ['Profile completeness', 'Active trends', 'Connected platforms', 'Main trend score'],
+    profileTitle: 'Profile ready for content',
+    profileSummary: 'Python developer · IT · client acquisition',
+    profileMeta: 'Audience: IT companies and technical leaders',
+    styleTitle: 'Posts in personal style',
+    styleFlow: 'Hook -> insight -> case -> CTA',
+    socialTitle: 'Platforms and posts',
+    sourceTitle: 'Source map',
+    chartTitle: 'Publishing analytics',
+    published: 'Published',
+    scheduled: 'Scheduled',
+    cancelled: 'Cancelled',
+  },
+  kz: {
+    metrics: ['Профиль толықтығы', 'Белсенді трендтер', 'Қосылған платформалар', 'Негізгі тренд ұпайы'],
+    profileTitle: 'Профиль контентке дайын',
+    profileSummary: 'Python әзірлеуші · IT · клиент табу',
+    profileMeta: 'Аудитория: IT компаниялар және техникалық жетекшілер',
+    styleTitle: 'Жеке стильдегі посттар',
+    styleFlow: 'Hook -> insight -> case -> CTA',
+    socialTitle: 'Платформалар мен жарияланымдар',
+    sourceTitle: 'Дереккөз картасы',
+    chartTitle: 'Жариялау аналитикасы',
+    published: 'Жарияланды',
+    scheduled: 'Жоспарланды',
+    cancelled: 'Болдырылды',
+  },
+};
+
 export default function LandingPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const authenticated = Boolean(getToken());
   const startRoute = authenticated ? '/dashboard' : '/auth';
   const secondaryRoute = authenticated ? '/chat' : '/auth';
+  const preview = previewCopy[lang] || previewCopy.ru;
 
   const features = Array.from({ length: 6 }, (_, index) => {
     const Icon = featureIcons[index];
@@ -88,8 +136,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="landing-dashboard" aria-label="GhostWriter AI product preview">
-            <div className="landing-dashboard__top">
+          <div className="landing-analytics-preview" aria-label="GhostWriter AI analytics preview">
+            <div className="landing-dashboard__top landing-analytics-preview__top">
               <div className="landing-dashboard__brand">
                 <span className="landing-logo-mark"><Sparkles size={18} /></span>
                 <strong>{t('app.name')}</strong>
@@ -103,53 +151,104 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="landing-dashboard__grid">
-              <article className="landing-preview-card landing-preview-card--profile">
-                <div className="landing-preview-card__head">
-                  <UserRound size={22} />
-                  <span>{t('landing.feature1.title')}</span>
-                </div>
-                <div className="landing-preview-lines">
-                  <i className="w-5/6" />
-                  <i className="w-2/3" />
-                  <i className="w-4/6" />
-                </div>
-                <div className="landing-chip-row">
-                  <span>LinkedIn</span>
-                  <span>Telegram</span>
-                  <span>Expert tone</span>
-                </div>
+            <div className="landing-metric-strip">
+              <article className="landing-metric-card landing-metric-card--cyan">
+                <UserRound size={18} />
+                <span>{preview.metrics[0]}</span>
+                <strong>100%</strong>
               </article>
-
-              <article className="landing-preview-card landing-preview-card--accent">
-                <TrendingUp size={24} />
-                <span>{t('landing.feature2.title')}</span>
+              <article className="landing-metric-card landing-metric-card--orange">
+                <TrendingUp size={18} />
+                <span>{preview.metrics[1]}</span>
+                <strong>64</strong>
+              </article>
+              <article className="landing-metric-card landing-metric-card--teal">
+                <Globe2 size={18} />
+                <span>{preview.metrics[2]}</span>
                 <strong>8</strong>
-                <small>high relevance</small>
+              </article>
+              <article className="landing-metric-card landing-metric-card--violet">
+                <Flame size={18} />
+                <span>{preview.metrics[3]}</span>
+                <strong>93</strong>
+              </article>
+            </div>
+
+            <div className="landing-analytics-grid">
+              <article className="landing-analytics-card landing-analytics-card--profile">
+                <div className="landing-analytics-card__head">
+                  <UserRound size={22} />
+                  <span>{preview.profileTitle}</span>
+                  <strong>100%</strong>
+                </div>
+                <div className="landing-progress" aria-hidden="true">
+                  <i style={{ width: '100%' }} />
+                </div>
+                <h3>{preview.profileSummary}</h3>
+                <p>{preview.profileMeta}</p>
+                <div className="landing-chip-row landing-chip-row--compact">
+                  <span>Telegram</span>
+                  <span>LinkedIn</span>
+                  <span>Expert tone</span>
+                  <span>Audience</span>
+                </div>
               </article>
 
-              <article className="landing-preview-card">
-                <div className="landing-preview-card__head">
+              <article className="landing-analytics-card landing-analytics-card--style">
+                <div className="landing-analytics-card__head">
                   <PenTool size={22} />
-                  <span>{t('landing.feature4.title')}</span>
+                  <span>{preview.styleTitle}</span>
+                  <p className="landing-style-flow">{preview.styleFlow}</p>
                 </div>
                 <p>Hook → insight → example → CTA</p>
-                <div className="landing-post-skeleton">
+                <div className="landing-preview-lines landing-preview-lines--short">
                   <i />
                   <i />
                   <i />
                 </div>
               </article>
 
-              <article className="landing-preview-card landing-preview-card--chart">
-                <div className="landing-preview-card__head">
-                  <Activity size={22} />
-                  <span>{t('landing.feature6.title')}</span>
+              <article className="landing-analytics-card landing-analytics-card--social">
+                <div className="landing-analytics-card__head">
+                  <Globe2 size={22} />
+                  <span>{preview.socialTitle}</span>
                 </div>
-                <div className="landing-bars">
-                  {[42, 64, 52, 78, 68, 88, 58].map((height, index) => (
+                <div className="landing-platform-rows">
+                  <div className="landing-platform-row">
+                    <span>Telegram</span>
+                    <b>8</b>
+                  </div>
+                  <div className="landing-platform-row">
+                    <span>{preview.published}</span>
+                    <b>4</b>
+                  </div>
+                  <div className="landing-platform-row">
+                    <span>{preview.scheduled}</span>
+                    <b>3</b>
+                  </div>
+                  <div className="landing-platform-row">
+                    <span>{preview.cancelled}</span>
+                    <b>1</b>
+                  </div>
+                </div>
+              </article>
+
+              <article className="landing-analytics-card landing-analytics-card--chart">
+                <div className="landing-analytics-card__head">
+                  <Activity size={22} />
+                  <span>{preview.chartTitle}</span>
+                  <small>{preview.sourceTitle}</small>
+                </div>
+                <div className="landing-chart-bars" aria-hidden="true">
+                  {[44, 62, 51, 76, 68, 86, 58].map((height, index) => (
                     <span key={index} style={{ height: `${height}%` }} />
                   ))}
+                </div>
+                <div className="landing-source-summary">
+                  <span>rss 459</span>
+                  <span>demo 14</span>
+                  <span>profile_context 2</span>
+                  <span>Trends</span>
                 </div>
               </article>
             </div>
