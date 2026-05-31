@@ -1,20 +1,29 @@
-import { ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ErrorNotice } from '../components/ErrorNotice';
-import { PageHeader } from '../components/PageHeader';
 import { api, errorMessage } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 
 type Question = { key: string; text: string; choices?: string[]; example?: string };
+type Answers = Record<string, string>;
+
+function isOptionalPlatformQuestion(question: Question) {
+  const source = `${question.key} ${question.text}`.toLowerCase();
+  return /(platform|publish|social|соцсет|публиков|платформ|telegram|linkedin|instagram)/i.test(source);
+}
+
+function usesTextarea(question: Question) {
+  const source = `${question.key} ${question.text}`.toLowerCase();
+  return /(audience|goal|values|avoid|content|links|аудитор|цель|ценност|избег|контент|ссылк|опис)/i.test(source);
+}
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [sessionId, setSessionId] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [index, setIndex] = useState(0);
-  const [answer, setAnswer] = useState('');
+  const [answers, setAnswers] = useState<Answers>({});
   const [finishing, setFinishing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,6 +37,13 @@ export default function OnboardingPage() {
       const data = await api<{ session: { id: string }; questions: Question[] }>('/api/onboarding/start', { method: 'POST' });
       setSessionId(data.session.id);
       setQuestions(data.questions);
+      setAnswers((current) => {
+        const next = { ...current };
+        data.questions.forEach((question) => {
+          if (next[question.key] === undefined) next[question.key] = '';
+        });
+        return next;
+      });
     } catch (err) {
       setError(errorMessage(err, t('common.loadError')));
     } finally {
@@ -39,73 +55,168 @@ export default function OnboardingPage() {
     start();
   }, []);
 
-  async function next() {
-    const question = questions[index];
-    if (!question || !answer.trim()) return;
+  const requiredQuestions = useMemo(() => questions.filter((question) => !isOptionalPlatformQuestion(question)), [questions]);
+  const filledCount = questions.filter((question) => answers[question.key]?.trim()).length;
+  const requiredFilled = requiredQuestions.every((question) => answers[question.key]?.trim());
+  const pct = questions.length ? Math.round((filledCount / questions.length) * 100) : 0;
+  const optionalLabel = lang === 'en' ? 'Optional' : lang === 'kz' ? 'Қосымша' : 'Необязательно';
+
+  function updateAnswer(key: string, value: string) {
+    setAnswers((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!sessionId || finishing) return;
+    if (!requiredFilled) {
+      setError(t('auth.errors.VALIDATION_ERROR'));
+      return;
+    }
     setError('');
+    setFinishing(true);
     try {
-      await api(`/api/onboarding/${sessionId}/answers`, { method: 'POST', body: JSON.stringify({ key: question.key, answer }) });
-      setAnswer('');
-      if (index + 1 >= questions.length) {
-        setFinishing(true);
-        const result = await api<{ flow?: Array<{ step: string; status: string; count?: number }> }>(`/api/onboarding/${sessionId}/finish`, { method: 'POST' });
-        const trends = result.flow?.find((item) => item.step === 'trends_found');
-        setSummary(`${t('chat.progress.profile_saved')}. ${t('chat.trendsFound')}: ${trends?.count ?? 0}`);
-        navigate('/chat');
-      } else {
-        setIndex(index + 1);
+      for (const question of questions) {
+        const answer = answers[question.key]?.trim();
+        if (!answer) continue;
+        await api(`/api/onboarding/${sessionId}/answers`, { method: 'POST', body: JSON.stringify({ key: question.key, answer }) });
       }
+      const result = await api<{ flow?: Array<{ step: string; status: string; count?: number }> }>(`/api/onboarding/${sessionId}/finish`, { method: 'POST' });
+      const trends = result.flow?.find((item) => item.step === 'trends_found');
+      setSummary(`${t('chat.progress.profile_saved')}. ${t('chat.trendsFound')}: ${trends?.count ?? 0}`);
+      navigate('/chat');
     } catch (err) {
       setError(errorMessage(err, t('common.actionError')));
       setFinishing(false);
     }
   }
 
-  const question = questions[index];
-  const pct = questions.length ? Math.round(((index + 1) / questions.length) * 100) : 0;
-
   return (
-    <>
-      <PageHeader title={t('onboarding.title')} description={t('onboarding.desc')} />
-      <ErrorNotice message={error} onRetry={loading || finishing ? undefined : start} />
-      <section className="panel mx-auto max-w-2xl p-6">
-        {loading ? <div className="text-sm text-black/50">{t('common.loading')}</div> : null}
-        {summary ? <div className="mb-4 rounded-md border border-teal/20 bg-teal/10 p-3 text-sm font-semibold text-teal">{summary}</div> : null}
-        <div className="mb-5 h-2 overflow-hidden bg-black/5" style={{ borderRadius: 8 }}>
-          <div className="h-full bg-teal transition-all" style={{ width: `${pct}%` }} />
-        </div>
-        {finishing ? (
-          <div className="mb-5 grid gap-2 border border-black/10 bg-black/5 p-3 text-sm text-black/65" style={{ borderRadius: 8 }}>
-            {finishSteps.map((key) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-teal" />
-                <span>{t(`chat.progress.${key}`)}</span>
-              </div>
-            ))}
+    <section className="onboarding-page">
+      <div className="onboarding-shell">
+        <header className="onboarding-hero reveal-section">
+          <div>
+            <div className="onboarding-pill">
+              <Sparkles size={15} />
+              <span>Digital profile builder</span>
+            </div>
+            <h1>{t('onboarding.title')}</h1>
+            <p>{t('onboarding.desc')}</p>
           </div>
-        ) : null}
-        <div className="min-h-72">
-          <div className="text-sm font-semibold text-black/50">
-            {t('onboarding.question')} {Math.min(index + 1, questions.length || 1)} / {questions.length || 1}
-          </div>
-          <h2 className="mt-4 text-2xl font-bold">{question?.text || t('common.loading')}</h2>
-          {question?.example ? <p className="mt-2 text-sm text-black/50">{question.example}</p> : null}
-          {question?.choices ? (
-            <div className="mt-6 grid gap-2">
-              {question.choices.map((choice) => (
-                <button key={choice} className={answer === choice ? 'primary-button justify-start' : 'secondary-button justify-start'} onClick={() => setAnswer(choice)}>
-                  {choice}
-                </button>
+          <aside className="onboarding-summary-card">
+            <span>{filledCount}/{questions.length || 9}</span>
+            <strong>{t('dashboard.profile.title')}</strong>
+            <p>{t('landing.feature1.text')}</p>
+            <div className="onboarding-progress">
+              <i style={{ width: `${pct}%` }} />
+            </div>
+          </aside>
+        </header>
+
+        <ErrorNotice message={error} onRetry={loading || finishing ? undefined : start} />
+
+        <form className="onboarding-form reveal-section" onSubmit={submit}>
+          {loading ? <div className="onboarding-loading">{t('common.loading')}</div> : null}
+          {summary ? <div className="onboarding-success">{summary}</div> : null}
+
+          {finishing ? (
+            <div className="onboarding-finish">
+              {finishSteps.map((key) => (
+                <div key={key}>
+                  <span />
+                  <p>{t(`chat.progress.${key}`)}</p>
+                </div>
               ))}
             </div>
-          ) : (
-            <textarea className="field mt-6 min-h-32" value={answer} onChange={(e) => setAnswer(e.target.value)} />
-          )}
+          ) : null}
+
+          <div className="onboarding-question-grid">
+            {questions.map((question, index) => {
+              const value = answers[question.key] || '';
+              const optional = isOptionalPlatformQuestion(question);
+              const longAnswer = usesTextarea(question);
+              return (
+                <article key={question.key} className={`onboarding-question-card ${longAnswer ? 'is-wide' : ''}`}>
+                  <div className="onboarding-question-card__top">
+                    <span>{index + 1}</span>
+                    {optional ? <em>{optionalLabel}</em> : null}
+                  </div>
+                  <h2>{question.text}</h2>
+                  {question.example ? <p>{question.example}</p> : null}
+
+                  {question.choices ? (
+                    <div className="onboarding-choice-list">
+                      {question.choices.map((choice) => (
+                        <button
+                          key={choice}
+                          className={value === choice ? 'is-selected' : ''}
+                          onClick={() => updateAnswer(question.key, choice)}
+                          type="button"
+                        >
+                          <CheckCircle2 size={16} />
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  ) : longAnswer ? (
+                    <textarea
+                      className="field onboarding-field onboarding-textarea"
+                      disabled={finishing}
+                      value={value}
+                      onChange={(event) => updateAnswer(question.key, event.target.value)}
+                    />
+                  ) : (
+                    <input
+                      className="field onboarding-field"
+                      disabled={finishing}
+                      value={value}
+                      onChange={(event) => updateAnswer(question.key, event.target.value)}
+                    />
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <footer className="onboarding-actions">
+            <div>
+              <strong>{filledCount}/{questions.length || 9}</strong>
+              <span>{t('onboarding.desc')}</span>
+            </div>
+            <button className="primary-button onboarding-submit" type="submit" disabled={!requiredFilled || !sessionId || finishing || loading}>
+              {finishing ? t('onboarding.loading.button') : t('common.finish')} <ArrowRight size={16} />
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      {finishing ? (
+        <div className="onboarding-loading-overlay" role="status" aria-live="polite">
+          <div className="onboarding-loading-modal">
+            <div className="onboarding-loading-spinner" />
+            <h2 className="onboarding-loading-title">{t('onboarding.loading.title')}</h2>
+            <p className="onboarding-loading-text">{t('onboarding.loading.text')}</p>
+            <div className="onboarding-loading-steps">
+              <div className="onboarding-loading-step">
+                <span />
+                {t('onboarding.loading.step1')}
+              </div>
+              <div className="onboarding-loading-step">
+                <span />
+                {t('onboarding.loading.step2')}
+              </div>
+              <div className="onboarding-loading-step">
+                <span />
+                {t('onboarding.loading.step3')}
+              </div>
+            </div>
+            <div className="onboarding-loading-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+          </div>
         </div>
-        <button className="primary-button mt-5" onClick={next} disabled={!answer.trim() || !sessionId || finishing}>
-          {index + 1 >= questions.length ? t('common.finish') : t('common.next')} <ArrowRight size={16} />
-        </button>
-      </section>
-    </>
+      ) : null}
+    </section>
   );
 }

@@ -10,14 +10,13 @@ export function LanguageSwitcher() {
   ] as const;
 
   return (
-    <div className="language-switcher inline-flex items-center gap-1 border border-black/10 bg-white p-1 shadow-soft" style={{ borderRadius: 8 }}>
-      <Languages size={16} className="mx-2 text-black/50" />
+    <div className="language-switcher">
+      <Languages size={15} className="language-switcher__icon" />
       {languages.map(({ code, short, label }) => (
         <button
           key={code}
           aria-label={label}
-          className={`language-switcher__button px-2 py-1 text-xs font-bold uppercase ${lang === code ? 'bg-ink text-white' : 'text-black/60 hover:text-ink'}`}
-          style={{ borderRadius: 6 }}
+          className={`language-switcher__button ${lang === code ? 'is-active' : ''}`}
           onClick={() => setLang(code)}
           title={label}
           type="button"

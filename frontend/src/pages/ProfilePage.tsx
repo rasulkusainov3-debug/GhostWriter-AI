@@ -84,8 +84,8 @@ export default function ProfilePage() {
     ['niche', t('profile.niche')],
     ['profession', t('profile.profession')],
     ['goal', t('profile.goal')],
-    ['tone', t('profile.tone')],
     ['audience', t('profile.audience')],
+    ['tone', t('profile.tone')],
     ['avoid', t('profile.avoid')],
   ] as const;
 
@@ -111,102 +111,135 @@ export default function ProfilePage() {
   }
 
   return (
-    <>
-      <PageHeader title={t('profile.title')} description={t('profile.desc')} action={<button className="primary-button" onClick={save} disabled={saving}><Save size={16} /> {t('common.save')}</button>} />
+    <div className="profile-editor">
+      <header className="profile-editor__header">
+        <div>
+          <h1>{t('profile.title')}</h1>
+          <p>{t('profile.desc')}</p>
+        </div>
+        <button className="primary-button profile-editor__save" onClick={save} disabled={saving}>
+          <Save size={17} />
+          {t('common.save')}
+        </button>
+      </header>
       <ErrorNotice message={error} />
-      {saved ? <div className="mb-4 rounded-md border border-teal/20 bg-teal/10 p-3 text-sm font-semibold text-teal">{t('common.saved')}</div> : null}
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="panel p-5">
-          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-teal/10 text-4xl font-bold text-teal">
-            {(profile.name || 'G').slice(0, 1)}
+      {saved ? <div className="profile-save-notice">{t('common.saved')}</div> : null}
+
+      <div className="profile-layout">
+        <section className="profile-card panel">
+          <div className="profile-card__header">
+            <div className="profile-avatar">{(profile.name || 'G').slice(0, 1)}</div>
+            <div>
+              <h2>{t('profile.title')}</h2>
+              <p>{profile.profession || t('profile.professionUnset')}</p>
+            </div>
           </div>
-          <div className="mt-5 text-center">
-            <div className="text-xl font-bold">{profile.name || t('profile.unnamed')}</div>
-            <div className="mt-1 text-sm text-black/50">{profile.profession || t('profile.professionUnset')}</div>
-          </div>
-        </aside>
-        <section className="panel p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+
+          <div className="profile-form-grid">
             {fields.map(([field, label]) => (
-              <label key={field} className="text-sm font-semibold">
-                {label}
-                <input className="field mt-1" value={(profile[field] as string) || ''} onChange={(e) => setProfile({ ...profile, [field]: e.target.value })} />
+              <label key={field} className={`profile-field ${field === 'audience' || field === 'avoid' ? 'profile-field--wide' : ''}`}>
+                <span>{label}</span>
+                {field === 'audience' || field === 'avoid' ? (
+                  <textarea
+                    className="field profile-input profile-textarea"
+                    value={(profile[field] as string) || ''}
+                    onChange={(e) => setProfile({ ...profile, [field]: e.target.value })}
+                  />
+                ) : (
+                  <input
+                    className="field profile-input"
+                    value={(profile[field] as string) || ''}
+                    onChange={(e) => setProfile({ ...profile, [field]: e.target.value })}
+                  />
+                )}
               </label>
             ))}
-            <label className="text-sm font-semibold">
-              {t('profile.values')}
-              <input className="field mt-1" value={(profile.user_values || []).join(', ')} onChange={(e) => setProfile({ ...profile, user_values: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} />
+            <label className="profile-field profile-field--wide">
+              <span>{t('profile.values')}</span>
+              <input
+                className="field profile-input"
+                value={(profile.user_values || []).join(', ')}
+                onChange={(e) => setProfile({ ...profile, user_values: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+              />
+              <small>{t('profile.styleTagsHelp')}</small>
             </label>
-            <label className="text-sm font-semibold">
-              {t('profile.platforms')}
-              <input className="field mt-1" value={(profile.platforms || []).join(', ')} onChange={(e) => setProfile({ ...profile, platforms: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} />
+            <label className="profile-field profile-field--wide">
+              <span>{t('profile.platforms')}</span>
+              <input
+                className="field profile-input"
+                value={(profile.platforms || []).join(', ')}
+                onChange={(e) => setProfile({ ...profile, platforms: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+              />
+              <small>{t('profile.styleTagsHelp')}</small>
             </label>
           </div>
         </section>
-        <section className="panel p-5 lg:col-span-2">
-          <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
+
+        <section className="profile-card profile-style-card panel">
+          <div className="profile-card__topline">
             <div>
-              <div className="flex items-center gap-2 text-lg font-bold">
+              <h2>
                 <Sparkles size={18} className="text-gold" />
                 {t('profile.styleTitle')}
-              </div>
-              <p className="mt-1 max-w-2xl text-sm text-black/55">{t('profile.styleHelp')}</p>
+              </h2>
+              <p>{t('profile.styleHelp')}</p>
             </div>
-            <span className="w-fit rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold text-black/60">
+            <span className="profile-style-count">
               {t('profile.styleExamples')}: {styleExamplesCount}
             </span>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <label className="text-sm font-semibold">
-              {t('profile.styleVoice')}
+
+          <div className="profile-style-grid">
+            <label className="profile-field">
+              <span>{t('profile.styleVoice')}</span>
               <input
-                className="field mt-1"
+                className="field profile-input"
                 placeholder={t('profile.styleVoicePlaceholder')}
                 value={personality.voice || ''}
                 onChange={(e) => updatePersonality({ voice: e.target.value })}
               />
             </label>
-            <label className="text-sm font-semibold">
-              {t('profile.styleWriting')}
+            <label className="profile-field profile-field--wide">
+              <span>{t('profile.styleWriting')}</span>
               <textarea
-                className="field mt-1 min-h-24 resize-y"
+                className="field profile-input profile-textarea profile-textarea--large"
                 placeholder={t('profile.styleWritingPlaceholder')}
                 value={personality.writing_style || ''}
                 onChange={(e) => updatePersonality({ writing_style: e.target.value })}
               />
             </label>
-            <label className="text-sm font-semibold">
-              {t('profile.styleStructure')}
+            <label className="profile-field">
+              <span>{t('profile.styleStructure')}</span>
               <input
-                className="field mt-1"
+                className="field profile-input"
                 value={(personality.preferred_structure || []).join(', ')}
                 onChange={(e) => updatePersonality({ preferred_structure: splitTags(e.target.value) })}
               />
-              <span className="mt-1 block text-xs text-black/45">{t('profile.styleTagsHelp')}</span>
+              <small>{t('profile.styleTagsHelp')}</small>
             </label>
-            <label className="text-sm font-semibold">
-              {t('profile.styleVocabulary')}
+            <label className="profile-field">
+              <span>{t('profile.styleVocabulary')}</span>
               <input
-                className="field mt-1"
+                className="field profile-input"
                 placeholder={t('profile.styleVocabularyPlaceholder')}
                 value={(personality.vocabulary_preferences || []).join(', ')}
                 onChange={(e) => updatePersonality({ vocabulary_preferences: splitTags(e.target.value) })}
               />
-              <span className="mt-1 block text-xs text-black/45">{t('profile.styleTagsHelp')}</span>
+              <small>{t('profile.styleTagsHelp')}</small>
             </label>
-            <label className="text-sm font-semibold lg:col-span-2">
-              {t('profile.styleAvoidPhrases')}
+            <label className="profile-field profile-field--wide">
+              <span>{t('profile.styleAvoidPhrases')}</span>
               <input
-                className="field mt-1"
+                className="field profile-input"
                 placeholder={t('profile.styleAvoidPlaceholder')}
                 value={(personality.avoid_phrases || []).join(', ')}
                 onChange={(e) => updatePersonality({ avoid_phrases: splitTags(e.target.value) })}
               />
-              <span className="mt-1 block text-xs text-black/45">{t('profile.styleTagsHelp')}</span>
+              <small>{t('profile.styleTagsHelp')}</small>
             </label>
           </div>
         </section>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CheckCircle2, Sparkles } from 'lucide-react';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ApiError, api, clearToken, setToken } from '../lib/api';
 import { useI18n } from '../lib/i18n';
@@ -150,79 +151,103 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4">
-      <form onSubmit={submit} className="panel w-full max-w-md p-6">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{t('auth.title')}</h1>
-            <p className="mt-2 text-sm text-black/60">{t('auth.subtitle')}</p>
+    <div className="auth-page">
+      <header className="auth-header">
+        <div className="auth-brand">GhostWriter AI</div>
+        <LanguageSwitcher />
+      </header>
+
+      <main className="auth-shell">
+        <section className="auth-intro" aria-hidden="true">
+          <div className="auth-intro__badge">
+            <Sparkles size={16} />
+            <span>AI content workspace</span>
           </div>
-          <LanguageSwitcher />
-        </div>
-        <div className="mb-5 grid grid-cols-2 gap-2">
-          <button type="button" className={mode === 'register' ? 'primary-button' : 'secondary-button'} onClick={() => setMode('register')}>
-            {t('common.register')}
-          </button>
-          <button type="button" className={mode === 'login' ? 'primary-button' : 'secondary-button'} onClick={() => setMode('login')}>
-            {t('common.login')}
-          </button>
-        </div>
-        {mode === 'register' ? (
-          <>
-            <div className="mb-3">
-              <input className="field" placeholder={t('auth.name')} value={form.name} onChange={(e) => update('name', e.target.value)} />
-              {fieldError('name')}
-            </div>
-            <div className="mb-3">
-              <input className="field" placeholder={t('auth.username')} value={form.username} onChange={(e) => update('username', e.target.value)} />
-              {fieldError('username')}
-            </div>
-            <select className="field mb-3" value={form.plan} onChange={(e) => update('plan', e.target.value)}>
-              <option value="free">{t('auth.free')}</option>
-              <option value="pro">{t('auth.pro')}</option>
-              <option value="team">{t('auth.team')}</option>
-            </select>
-            <div className="mb-3">
-              <input className="field" placeholder={t('auth.socialLinks')} value={form.social} onChange={(e) => update('social', e.target.value)} />
-              {fieldError('social')}
-            </div>
-          </>
-        ) : null}
-        <div className="mb-3">
-          <input
-            className="field"
-            placeholder={mode === 'login' ? t('auth.emailOrUsername') : t('auth.email')}
-            type={mode === 'login' ? 'text' : 'email'}
-            value={form.email}
-            onChange={(e) => update('email', e.target.value)}
-          />
-          {fieldError('email')}
-        </div>
-        <div className="mb-1">
-          <input className="field" placeholder={t('auth.password')} type="password" value={form.password} onChange={(e) => update('password', e.target.value)} />
-          {fieldError('password')}
-        </div>
-        {mode === 'register' ? (
-          <div className="mb-1">
-            <input
-              className="field"
-              placeholder={t('auth.passwordConfirm')}
-              type="password"
-              value={form.passwordConfirm}
-              onChange={(e) => update('passwordConfirm', e.target.value)}
-            />
-            {fieldError('passwordConfirm')}
+          <h2>Profile → Trends → Posts</h2>
+          <p>{t('landing.heroSubtitle')}</p>
+          <div className="auth-preview-card">
+            <div><CheckCircle2 size={16} /> {t('landing.feature1.title')}</div>
+            <div><CheckCircle2 size={16} /> {t('landing.feature2.title')}</div>
+            <div><CheckCircle2 size={16} /> {t('landing.feature4.title')}</div>
           </div>
-        ) : null}
-        <div className="mb-4 text-xs text-black/45">{t('auth.passwordHint')}</div>
-        {error ? (
-          <div className="mb-4 border border-coral/30 bg-coral/10 px-3 py-2 text-sm text-coral" style={{ borderRadius: 8 }}>
-            <div className="font-semibold">{t('auth.errorTitle')}</div>
-            <div>{error}</div>
+        </section>
+
+        <form onSubmit={submit} className="auth-card">
+          <div className="auth-card__head">
+            <h1>{t('auth.title')}</h1>
+            <p>{t('auth.subtitle')}</p>
           </div>
-        ) : null}
-        <button className="primary-button w-full" type="submit">{t('common.continue')}</button>
-      </form>
+
+          <div className="auth-tabs">
+            <button type="button" className={mode === 'register' ? 'is-active' : ''} onClick={() => setMode('register')}>
+              {t('common.register')}
+            </button>
+            <button type="button" className={mode === 'login' ? 'is-active' : ''} onClick={() => setMode('login')}>
+              {t('common.login')}
+            </button>
+          </div>
+
+          <div className="auth-fields">
+            {mode === 'register' ? (
+              <>
+                <div>
+                  <input className="field auth-field" placeholder={t('auth.name')} value={form.name} onChange={(e) => update('name', e.target.value)} />
+                  {fieldError('name')}
+                </div>
+                <div>
+                  <input className="field auth-field" placeholder={t('auth.username')} value={form.username} onChange={(e) => update('username', e.target.value)} />
+                  {fieldError('username')}
+                </div>
+                <select className="field auth-field" value={form.plan} onChange={(e) => update('plan', e.target.value)}>
+                  <option value="free">{t('auth.free')}</option>
+                  <option value="pro">{t('auth.pro')}</option>
+                  <option value="team">{t('auth.team')}</option>
+                </select>
+                <div>
+                  <input className="field auth-field" placeholder={t('auth.socialLinks')} value={form.social} onChange={(e) => update('social', e.target.value)} />
+                  {fieldError('social')}
+                </div>
+              </>
+            ) : null}
+
+            <div>
+              <input
+                className="field auth-field"
+                placeholder={mode === 'login' ? t('auth.emailOrUsername') : t('auth.email')}
+                type={mode === 'login' ? 'text' : 'email'}
+                value={form.email}
+                onChange={(e) => update('email', e.target.value)}
+              />
+              {fieldError('email')}
+            </div>
+            <div>
+              <input className="field auth-field" placeholder={t('auth.password')} type="password" value={form.password} onChange={(e) => update('password', e.target.value)} />
+              {fieldError('password')}
+            </div>
+            {mode === 'register' ? (
+              <div>
+                <input
+                  className="field auth-field"
+                  placeholder={t('auth.passwordConfirm')}
+                  type="password"
+                  value={form.passwordConfirm}
+                  onChange={(e) => update('passwordConfirm', e.target.value)}
+                />
+                {fieldError('passwordConfirm')}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="auth-helper">{t('auth.passwordHint')}</div>
+          {error ? (
+            <div className="auth-error">
+              <div>{t('auth.errorTitle')}</div>
+              <p>{error}</p>
+            </div>
+          ) : null}
+          <button className="primary-button auth-submit" type="submit">{t('common.continue')}</button>
+        </form>
+      </main>
     </div>
   );
 }

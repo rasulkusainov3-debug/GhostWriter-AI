@@ -1,7 +1,6 @@
-import { CalendarClock, Check, LayoutDashboard, RefreshCcw, Save, Send, Sparkles, X } from 'lucide-react';
+import { CalendarClock, Check, RefreshCcw, Save, Send, Sparkles, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
 import { ApiError, api, errorMessage } from '../lib/api';
 import { looksLikeInvalidGeneratedContent } from '../lib/contentQuality';
 import { useI18n } from '../lib/i18n';
@@ -153,6 +152,38 @@ function cleanAssistantText(text: string) {
   return normalized.trim();
 }
 
+function ExpandableText({
+  text,
+  showLabel,
+  hideLabel,
+  className = '',
+  defaultExpanded = false,
+}: {
+  text?: string;
+  showLabel: string;
+  hideLabel: string;
+  className?: string;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const value = String(text || '').trim();
+  if (!value) return null;
+  const isLong = value.length > 280 || value.split(/\r?\n/).length > 5;
+  return (
+    <div className={`expandable-text-wrap ${className}`}>
+      <div className={`expandable-text ${!expanded && isLong ? 'is-collapsed' : ''}`}>
+        {value}
+        {!expanded && isLong ? <span className="expandable-text__fade" /> : null}
+      </div>
+      {isLong ? (
+        <button className="expandable-text__toggle" type="button" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? hideLabel : showLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const { t, status } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -166,6 +197,7 @@ export default function ChatPage() {
   const [longWaitLevel, setLongWaitLevel] = useState(0);
   const [selectedPost, setSelectedPost] = useState<GeneratedPostCard | null>(null);
   const [postDraft, setPostDraft] = useState({ draft_text: '', final_text: '', status: 'draft' });
+  const [previewEditing, setPreviewEditing] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -217,6 +249,7 @@ export default function ChatPage() {
     setVisualAssets([]);
     setScheduleError('');
     setScheduleFields(defaultScheduleFields());
+    setPreviewEditing(false);
     if (openPreview) setPreviewOpen(true);
   }
 
@@ -518,15 +551,11 @@ export default function ChatPage() {
           <img className="chat-post-thumb" src={post.selected_asset.preview_url} alt={post.selected_asset.alt_text || ''} />
         ) : null}
         {invalid ? renderPostWarning() : (
-          <textarea
-            className="field chat-post-textarea"
-            value={textValue}
-            onFocus={() => !isSelected && selectPost(post)}
-            onChange={(event) => {
-              if (!isSelected) selectPost(post);
-              setPostDraft((current) => ({ ...current, final_text: event.target.value }));
-              setSaveState('unsaved');
-            }}
+          <ExpandableText
+            text={textValue}
+            showLabel={t('common.showFull')}
+            hideLabel={t('common.collapse')}
+            className="generated-post-readable"
           />
         )}
         <div className="chat-actions">
@@ -699,7 +728,12 @@ export default function ChatPage() {
                   <div className="social-preview__author">{profile?.name || t('profile.unnamed')}</div>
                   <div className="chat-card-meta">{selectedPost.platform}</div>
                 </div>
-                <span className="status-pill">{status(postDraft.status)}</span>
+                <div className="preview-head-actions">
+                  <span className="status-pill">{status(postDraft.status)}</span>
+                  <button className="secondary-button text-xs" type="button" onClick={() => setPreviewEditing((current) => !current)}>
+                    {previewEditing ? t('common.previewMode') : t('chat.editInPreview')}
+                  </button>
+                </div>
               </div>
               {selectedPost.selected_asset?.preview_url ? (
                 <img className="social-preview__image" src={selectedPost.selected_asset.preview_url} alt={selectedPost.selected_asset.alt_text || t('chat.previewImagePlaceholder')} />
@@ -708,28 +742,46 @@ export default function ChatPage() {
               )}
               <div className="field-help">{t('posts.finalHelp')}</div>
               {invalid ? renderPostWarning() : (
-                <textarea
-                  className="field social-preview__text"
-                  value={postDraft.final_text}
-                  onChange={(event) => {
-                    setPostDraft((current) => ({ ...current, final_text: event.target.value }));
-                    setSaveState('unsaved');
-                  }}
-                />
+                previewEditing ? (
+                  <textarea
+                    className="field social-preview__text"
+                    value={postDraft.final_text}
+                    onChange={(event) => {
+                      setPostDraft((current) => ({ ...current, final_text: event.target.value }));
+                      setSaveState('unsaved');
+                    }}
+                  />
+                ) : (
+                  <ExpandableText
+                    text={postDraft.final_text}
+                    showLabel={t('common.showFull')}
+                    hideLabel={t('common.collapse')}
+                    className="preview-readable-text"
+                  />
+                )
               )}
               {selectedPost.active_schedule ? <div className="chat-card-meta">{t('schedule.active')}: {formatLocalDateTime(selectedPost.active_schedule.scheduled_for)}</div> : null}
             </div>
             <label className="form-label">
               {t('posts.draftText')}
               <span className="field-help">{t('posts.draftHelp')}</span>
-              <textarea
-                className="field min-h-28"
-                value={postDraft.draft_text}
-                onChange={(event) => {
-                  setPostDraft((current) => ({ ...current, draft_text: event.target.value }));
-                  setSaveState('unsaved');
-                }}
-              />
+              {previewEditing ? (
+                <textarea
+                  className="field min-h-28 chat-draft-textarea"
+                  value={postDraft.draft_text}
+                  onChange={(event) => {
+                    setPostDraft((current) => ({ ...current, draft_text: event.target.value }));
+                    setSaveState('unsaved');
+                  }}
+                />
+              ) : (
+                <ExpandableText
+                  text={postDraft.draft_text}
+                  showLabel={t('common.showFull')}
+                  hideLabel={t('common.collapse')}
+                  className="preview-readable-text is-draft"
+                />
+              )}
             </label>
             <select
               className="field"
@@ -875,7 +927,18 @@ export default function ChatPage() {
     return (
       <div key={index} className={`message-row ${message.role === 'user' ? 'is-user' : 'is-assistant'}`}>
         <div className="message-bubble">
-          {cleanedText ? <div className="message-text">{cleanedText}</div> : null}
+          {cleanedText ? (
+            message.role === 'assistant' && cleanedText.length > 520 ? (
+              <ExpandableText
+                text={cleanedText}
+                showLabel={t('common.showFull')}
+                hideLabel={t('common.collapse')}
+                className="message-text expandable-message-text"
+              />
+            ) : (
+              <div className="message-text">{cleanedText}</div>
+            )
+          ) : null}
           {message.role === 'assistant' ? renderAction(message.action) : null}
         </div>
       </div>
@@ -884,15 +947,6 @@ export default function ChatPage() {
 
   return (
     <>
-      <PageHeader
-        title={t('chat.title')}
-        description={t('chat.desc')}
-        action={
-          <Link className="primary-button" to="/dashboard">
-            <LayoutDashboard size={16} /> {t('nav.menu')}
-          </Link>
-        }
-      />
       {actionError ? <div className="chat-error page-error">{actionError}</div> : null}
       <div className="chat-mobile-tabs">
         <button className="secondary-button" type="button" onClick={() => setSidebarOpen((value) => !value)}>{t('chat.sidebar')}</button>

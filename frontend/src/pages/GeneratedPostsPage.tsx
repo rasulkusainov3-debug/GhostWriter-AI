@@ -77,11 +77,46 @@ function safeGeneratedText(value: string | null | undefined, fallback: string) {
   return text && !looksLikeInvalidGeneratedContent(text) ? text : fallback;
 }
 
+function ExpandableText({
+  text,
+  showLabel,
+  hideLabel,
+  className = '',
+  defaultExpanded = false,
+}: {
+  text?: string | null;
+  showLabel: string;
+  hideLabel: string;
+  className?: string;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const value = String(text || '').trim();
+  if (!value) return null;
+
+  const isLong = value.length > 320 || value.split(/\r?\n/).length > 6;
+
+  return (
+    <div className={`expandable-text-wrap ${className}`}>
+      <div className={`expandable-text ${!expanded && isLong ? 'is-collapsed' : ''}`}>
+        {value}
+        {!expanded && isLong ? <span className="expandable-text__fade" /> : null}
+      </div>
+      {isLong ? (
+        <button className="expandable-text__toggle" type="button" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? hideLabel : showLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function GeneratedPostsPage() {
   const { t, status } = useI18n();
   const [posts, setPosts] = useState<GeneratedPost[]>([]);
   const [originalPosts, setOriginalPosts] = useState<Record<string, GeneratedPost>>({});
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
+  const [editingText, setEditingText] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [assetsByPost, setAssetsByPost] = useState<Record<string, PostAsset[]>>({});
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
@@ -141,6 +176,7 @@ export default function GeneratedPostsPage() {
     setPosts((current) => current.map((post) => (post.id === updated.id ? updated : post)));
     setOriginalPosts((current) => ({ ...current, [updated.id]: updated }));
     setDirty((current) => ({ ...current, [updated.id]: false }));
+    setEditingText((current) => ({ ...current, [updated.id]: false }));
   }
 
   function revertPost(postId: string) {
@@ -148,6 +184,7 @@ export default function GeneratedPostsPage() {
     if (!original) return;
     setPosts((current) => current.map((post) => (post.id === postId ? original : post)));
     setDirty((current) => ({ ...current, [postId]: false }));
+    setEditingText((current) => ({ ...current, [postId]: false }));
   }
 
   async function update(post: GeneratedPost, nextStatus?: string) {
@@ -539,6 +576,7 @@ export default function GeneratedPostsPage() {
           const lowEngagement = Boolean(latestMetric && recommendations?.low_engagement_posts?.some((item) => String(item.id) === String(post.id)));
           const invalidDraft = looksLikeInvalidGeneratedContent(post.draft_text);
           const invalidFinal = looksLikeInvalidGeneratedContent(post.final_text);
+          const isEditingText = Boolean(editingText[post.id] || invalidDraft || invalidFinal);
           return (
             <article key={post.id} className="post-work-card panel">
               <div className="post-work-card__head">
@@ -591,16 +629,44 @@ export default function GeneratedPostsPage() {
                         </div>
                       </div>
                     ) : null}
-                  <label className="form-label">
-                    {t('posts.draftText')}
-                    <span className="field-help">{t('posts.draftHelp')}</span>
-                    <textarea className="field editorial-textarea" value={invalidDraft ? '' : post.draft_text || ''} onChange={(e) => updateLocal(post.id, { draft_text: e.target.value })} placeholder={invalidDraft ? t('posts.replaceInvalidText') : ''} />
-                  </label>
-                  <label className="form-label">
-                    {t('posts.finalText')}
-                    <span className="field-help">{t('posts.finalHelp')}</span>
-                    <textarea className="field editorial-textarea" value={invalidFinal ? '' : post.final_text || ''} onChange={(e) => updateLocal(post.id, { final_text: e.target.value })} placeholder={invalidFinal ? t('posts.replaceInvalidText') : ''} />
-                  </label>
+                  <div className="post-text-section">
+                    <div className="post-text-section__head">
+                      <div className="post-text-section__title">
+                        <span className="section-label">{t('posts.draftText')}</span>
+                        <span className="field-help">{t('posts.draftHelp')}</span>
+                      </div>
+                      {!isEditingText ? (
+                        <button className="secondary-button text-xs" type="button" onClick={() => setEditingText((current) => ({ ...current, [post.id]: true }))}>
+                          {t('common.edit')}
+                        </button>
+                      ) : null}
+                    </div>
+                    {isEditingText ? (
+                      <textarea className="field editorial-textarea post-edit-textarea post-edit-textarea--draft" value={invalidDraft ? '' : post.draft_text || ''} onChange={(e) => updateLocal(post.id, { draft_text: e.target.value })} placeholder={invalidDraft ? t('posts.replaceInvalidText') : ''} />
+                    ) : (
+                      <ExpandableText text={post.draft_text} showLabel={t('common.showFull')} hideLabel={t('common.collapse')} className="post-readonly-text" />
+                    )}
+                    {!isEditingText && !String(post.draft_text || '').trim() ? <div className="post-readonly-empty">{t('common.empty')}</div> : null}
+                  </div>
+                  <div className="post-text-section">
+                    <div className="post-text-section__head">
+                      <div className="post-text-section__title">
+                        <span className="section-label">{t('posts.finalText')}</span>
+                        <span className="field-help">{t('posts.finalHelp')}</span>
+                      </div>
+                      {!isEditingText ? (
+                        <button className="secondary-button text-xs" type="button" onClick={() => setEditingText((current) => ({ ...current, [post.id]: true }))}>
+                          {t('common.edit')}
+                        </button>
+                      ) : null}
+                    </div>
+                    {isEditingText ? (
+                      <textarea className="field editorial-textarea post-edit-textarea post-edit-textarea--final" value={invalidFinal ? '' : post.final_text || ''} onChange={(e) => updateLocal(post.id, { final_text: e.target.value })} placeholder={invalidFinal ? t('posts.replaceInvalidText') : ''} />
+                    ) : (
+                      <ExpandableText text={post.final_text} showLabel={t('common.showFull')} hideLabel={t('common.collapse')} className="post-readonly-text" />
+                    )}
+                    {!isEditingText && !String(post.final_text || '').trim() ? <div className="post-readonly-empty">{t('common.empty')}</div> : null}
+                  </div>
                   <div className="post-status-row">
                     <label className="form-label">
                       {t('posts.status')}
@@ -629,7 +695,7 @@ export default function GeneratedPostsPage() {
                       background: '#1f2727',
                       color: 'white',
                       fontWeight: 700,
-                      fontSize: 12,
+                      fontSize: 16,
                     }}
                     title="Язык поста"
                   >

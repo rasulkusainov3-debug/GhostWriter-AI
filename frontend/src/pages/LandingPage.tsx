@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowRight,
   BarChart3,
   Bot,
@@ -8,8 +9,10 @@ import {
   Layers3,
   LogIn,
   MessageSquareText,
+  PenTool,
   Search,
   Sparkles,
+  TrendingUp,
   UserRound,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -45,73 +48,138 @@ export default function LandingPage() {
   });
 
   return (
-    <div className="aurora-app landing-page text-ink">
+    <div className="landing-page">
       <header className="landing-header">
-        <Link to="/" className="aurora-brand landing-brand">{t('app.name')}</Link>
-        <div className="landing-nav-actions">
-          <LanguageSwitcher />
-          <Link to={startRoute} className="secondary-button">
-            <LogIn size={16} /> {authenticated ? t('nav.menu') : t('common.login')}
-          </Link>
+        <div className="landing-header__inner">
+          <Link to="/" className="landing-brand">{t('app.name')}</Link>
+          <nav className="landing-nav" aria-label="Landing navigation">
+            <a href="#about">{t('landing.aboutTitle')}</a>
+            <a href="#features">{t('landing.featuresTitle')}</a>
+            <a href="#workflow">{t('landing.stepsTitle')}</a>
+            <a href="#agents">{t('landing.agentsTitle')}</a>
+          </nav>
+          <div className="landing-nav-actions">
+            <LanguageSwitcher />
+            <Link to={startRoute} className="secondary-button landing-login">
+              <LogIn size={16} /> {authenticated ? t('nav.menu') : t('common.login')}
+            </Link>
+          </div>
         </div>
       </header>
 
       <main className="landing-main">
         <section className="landing-hero reveal-section">
-          <div className="landing-glow landing-glow--one" />
-          <div className="landing-glow landing-glow--two" />
-          <div className="landing-hero__content">
-            <div className="landing-hero__copy">
-              <h1>{t('landing.heroHeadline')}</h1>
-              <p>{t('landing.heroSubtitle')}</p>
-              <div className="landing-cta-row">
-                <Link to={startRoute} className="primary-button landing-primary">
-                  {t('common.start')} <ArrowRight size={18} />
-                </Link>
-                <Link to={secondaryRoute} className="secondary-button">
-                  {authenticated ? t('landing.ctaChat') : t('common.createAccount')}
-                </Link>
+          <div className="landing-hero__halo landing-hero__halo--orange" />
+          <div className="landing-hero__halo landing-hero__halo--cyan" />
+          <div className="landing-hero__intro">
+            <div className="landing-pill">
+              <Sparkles size={15} />
+              <span>AI content workspace</span>
+            </div>
+            <h1>{t('landing.heroHeadline')}</h1>
+            <p>{t('landing.heroSubtitle')}</p>
+            <div className="landing-cta-row landing-cta-row--center">
+              <Link to={startRoute} className="primary-button landing-primary">
+                {t('common.start')} <ArrowRight size={18} />
+              </Link>
+              <Link to={secondaryRoute} className="secondary-button">
+                {authenticated ? t('landing.ctaChat') : t('common.createAccount')}
+              </Link>
+            </div>
+          </div>
+
+          <div className="landing-dashboard" aria-label="GhostWriter AI product preview">
+            <div className="landing-dashboard__top">
+              <div className="landing-dashboard__brand">
+                <span className="landing-logo-mark"><Sparkles size={18} /></span>
+                <strong>{t('app.name')}</strong>
+              </div>
+              <div className="landing-dashboard__tabs">
+                <span>Profile</span>
+                <span>Trends</span>
+                <span>Posts</span>
+                <span>Visuals</span>
+                <span>Metrics</span>
               </div>
             </div>
-            <div className="landing-hero-card">
-              <div className="landing-hero-card__top">
-                <span>{t('landing.heroCardTitle')}</span>
-                <Sparkles size={18} />
-              </div>
-              <div className="landing-signal-list">
-                <div><CheckCircle2 size={16} /> {t('landing.signal1')}</div>
-                <div><CheckCircle2 size={16} /> {t('landing.signal2')}</div>
-                <div><CheckCircle2 size={16} /> {t('landing.signal3')}</div>
-              </div>
-              <div className="landing-mini-preview">
-                <div className="landing-mini-preview__line w-5/6" />
-                <div className="landing-mini-preview__line w-2/3" />
-                <div className="landing-mini-preview__tags">
+
+            <div className="landing-dashboard__grid">
+              <article className="landing-preview-card landing-preview-card--profile">
+                <div className="landing-preview-card__head">
+                  <UserRound size={22} />
+                  <span>{t('landing.feature1.title')}</span>
+                </div>
+                <div className="landing-preview-lines">
+                  <i className="w-5/6" />
+                  <i className="w-2/3" />
+                  <i className="w-4/6" />
+                </div>
+                <div className="landing-chip-row">
                   <span>LinkedIn</span>
                   <span>Telegram</span>
-                  <span>AI trends</span>
+                  <span>Expert tone</span>
                 </div>
-              </div>
+              </article>
+
+              <article className="landing-preview-card landing-preview-card--accent">
+                <TrendingUp size={24} />
+                <span>{t('landing.feature2.title')}</span>
+                <strong>8</strong>
+                <small>high relevance</small>
+              </article>
+
+              <article className="landing-preview-card">
+                <div className="landing-preview-card__head">
+                  <PenTool size={22} />
+                  <span>{t('landing.feature4.title')}</span>
+                </div>
+                <p>Hook → insight → example → CTA</p>
+                <div className="landing-post-skeleton">
+                  <i />
+                  <i />
+                  <i />
+                </div>
+              </article>
+
+              <article className="landing-preview-card landing-preview-card--chart">
+                <div className="landing-preview-card__head">
+                  <Activity size={22} />
+                  <span>{t('landing.feature6.title')}</span>
+                </div>
+                <div className="landing-bars">
+                  {[42, 64, 52, 78, 68, 88, 58].map((height, index) => (
+                    <span key={index} style={{ height: `${height}%` }} />
+                  ))}
+                </div>
+              </article>
             </div>
           </div>
         </section>
 
-        <section className="landing-section landing-about reveal-section">
-          <div className="landing-section__head">
+        <section className="landing-trust reveal-section">
+          <span>Profile context</span>
+          <span>Trend relevance</span>
+          <span>Platform style</span>
+          <span>Visual workflow</span>
+          <span>Manual metrics</span>
+        </section>
+
+        <section id="about" className="landing-section landing-about reveal-section">
+          <div className="landing-section__head landing-section__head--center">
             <h2>{t('landing.aboutTitle')}</h2>
             <p>{t('landing.aboutText')}</p>
           </div>
         </section>
 
-        <section className="landing-section reveal-section">
-          <div className="landing-section__head">
+        <section id="features" className="landing-section reveal-section">
+          <div className="landing-section__head landing-section__head--center">
             <h2>{t('landing.featuresTitle')}</h2>
             <p>{t('landing.featuresText')}</p>
           </div>
           <div className="landing-feature-grid">
             {features.map(({ Icon, title, text }) => (
               <article key={title} className="landing-feature-card">
-                <div className="landing-icon"><Icon size={22} /></div>
+                <div className="landing-icon"><Icon size={24} /></div>
                 <h3>{title}</h3>
                 <p>{text}</p>
               </article>
@@ -119,19 +187,16 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="landing-section reveal-section">
-          <div className="landing-section__head landing-section__head--split">
-            <div>
-              <h2>{t('landing.stepsTitle')}</h2>
-              <p>{t('landing.stepsText')}</p>
-            </div>
-            <Link to={startRoute} className="secondary-button">{t('common.start')}</Link>
+        <section id="workflow" className="landing-section reveal-section">
+          <div className="landing-section__head landing-section__head--center">
+            <h2>{t('landing.stepsTitle')}</h2>
+            <p>{t('landing.stepsText')}</p>
           </div>
           <div className="landing-steps">
             {steps.map(({ Icon, title, text }, index) => (
               <article key={title} className="landing-step-card">
                 <div className="landing-step-card__number">{index + 1}</div>
-                <Icon size={22} />
+                <div className="landing-icon"><Icon size={24} /></div>
                 <h3>{title}</h3>
                 <p>{text}</p>
               </article>
@@ -139,21 +204,26 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="landing-section landing-agents reveal-section">
+        <section id="agents" className="landing-section landing-agents reveal-section">
           <div className="landing-section__head">
             <h2>{t('landing.agentsTitle')}</h2>
             <p>{t('landing.agentsText')}</p>
           </div>
           <div className="landing-agent-grid">
             <article className="landing-agent-card">
-              <Bot size={24} />
+              <div className="landing-icon"><Bot size={24} /></div>
               <h3>{t('landing.analyzerTitle')}</h3>
               <p>{t('landing.analyzerText')}</p>
             </article>
             <article className="landing-agent-card">
-              <Sparkles size={24} />
+              <div className="landing-icon"><Sparkles size={24} /></div>
               <h3>{t('landing.creatorTitle')}</h3>
               <p>{t('landing.creatorText')}</p>
+            </article>
+            <article className="landing-agent-card">
+              <div className="landing-icon"><BarChart3 size={24} /></div>
+              <h3>Publisher / Analytics</h3>
+              <p>{t('landing.feature6.text')}</p>
             </article>
           </div>
         </section>
