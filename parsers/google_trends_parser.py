@@ -24,7 +24,7 @@ NICHE_KEYWORDS = {
     "IT": [
         ["personal brand developer", "software engineer career"],
         ["salary negotiation tech",  "developer linkedin"],
-        ["programming trends 2025",  "tech career growth"],
+        ["programming trends 2026",  "tech career growth"],
     ],
     "маркетинг": [
         ["digital marketing trends", "content marketing 2025"],
@@ -37,7 +37,7 @@ NICHE_KEYWORDS = {
         ["how to get promoted",      "professional development"],
     ],
     "финансы": [
-        ["personal finance 2025",    "investing career"],
+        ["personal finance 2026",    "investing career"],
         ["salary increase",          "financial freedom"],
     ],
     "общее": [

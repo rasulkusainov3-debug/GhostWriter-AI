@@ -21,14 +21,14 @@ from datetime import datetime, timedelta
 from storage.database import save_raw_post
 
 NICHE_QUERIES = {
-    "IT":        ["software developer salary 2025", "tech career growth tips",
-                  "programming trends 2025", "developer personal brand"],
-    "карьера":   ["personal brand career growth 2025", "LinkedIn tips salary",
-                  "salary negotiation tips 2025", "professional self promotion"],
-    "маркетинг": ["digital marketing trends 2025", "content marketing strategy",
-                  "SMM trends social media 2025"],
-    "финансы":   ["personal finance tips 2025", "investing career growth"],
-    "общее":     ["personal branding tips 2025", "productivity career",
+    "IT":        ["software developer salary 2026", "tech career growth tips",
+                  "programming trends 2026", "developer personal brand"],
+    "карьера":   ["personal brand career growth 2026", "LinkedIn tips salary",
+                  "salary negotiation tips 2026", "professional self promotion"],
+    "маркетинг": ["digital marketing trends 2026", "content marketing strategy",
+                  "SMM trends social media 2026"],
+    "финансы":   ["personal finance tips 2026", "investing career growth"],
+    "общее":     ["personal branding tips 2026", "productivity career",
                   "professional growth tips"],
 }
 

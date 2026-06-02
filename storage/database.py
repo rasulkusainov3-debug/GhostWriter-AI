@@ -57,19 +57,26 @@ def init_db():
     # ── Профиль пользователя (постоянный) ────────────────────────────
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_profiles (
-            user_id     TEXT PRIMARY KEY,
-            name        TEXT,
-            niche       TEXT,
-            profession  TEXT,
-            goal        TEXT,
-            tone        TEXT,
-            audience    TEXT,
-            user_values TEXT,
-            avoid       TEXT,
-            platforms   TEXT,
-            raw_answers TEXT,
-            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            user_id      TEXT PRIMARY KEY,
+            name         TEXT,
+            niche        TEXT,
+            profession   TEXT,
+            goal         TEXT,
+            tone         TEXT,
+            audience     TEXT,
+            user_values  TEXT,
+            avoid        TEXT,
+            platforms    TEXT,
+            raw_answers  TEXT,
+            -- v2.0: новые поля умного онбординга
+            sector       TEXT,
+            prof_values  TEXT,
+            audience_type TEXT,
+            audience_level TEXT,
+            style_profile TEXT,
+            example_posts TEXT,
+            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -180,14 +187,18 @@ def save_user_profile(profile: dict):
     conn = get_connection()
     conn.execute("""
         INSERT INTO user_profiles
-            (user_id, name, niche, profession, goal, tone, audience, user_values, avoid, platforms, raw_answers, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, name, niche, profession, goal, tone, audience, user_values, avoid, platforms, raw_answers,
+             sector, prof_values, audience_type, audience_level, style_profile, example_posts, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             name=excluded.name, niche=excluded.niche,
             profession=excluded.profession, goal=excluded.goal,
             tone=excluded.tone, audience=excluded.audience,
             user_values=excluded.user_values, avoid=excluded.avoid,
             platforms=excluded.platforms, raw_answers=excluded.raw_answers,
+            sector=excluded.sector, prof_values=excluded.prof_values,
+            audience_type=excluded.audience_type, audience_level=excluded.audience_level,
+            style_profile=excluded.style_profile, example_posts=excluded.example_posts,
             updated_at=excluded.updated_at
     """, (
         profile.get("user_id", "default"),
@@ -201,6 +212,12 @@ def save_user_profile(profile: dict):
         profile.get("avoid"),
         json.dumps(profile.get("platforms", []), ensure_ascii=False),
         json.dumps(profile.get("raw_answers", {}), ensure_ascii=False),
+        profile.get("sector"),
+        json.dumps(profile.get("prof_values", []), ensure_ascii=False),
+        profile.get("audience_type"),
+        profile.get("audience_level"),
+        json.dumps(profile.get("style_profile", {}), ensure_ascii=False),
+        json.dumps(profile.get("example_posts", []), ensure_ascii=False),
         datetime.now().isoformat()
     ))
     conn.commit()

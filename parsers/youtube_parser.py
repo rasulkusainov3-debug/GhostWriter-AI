@@ -22,29 +22,29 @@ from storage.database import save_raw_post
 
 NICHE_YT_QUERIES = {
     "IT": [
-        "developer personal brand salary 2025",
+        "developer personal brand salary 2026",
         "software engineer linkedin tips",
         "python developer career growth",
         "tech salary negotiation",
     ],
     "маркетинг": [
-        "digital marketing personal brand 2025",
+        "digital marketing personal brand 2026",
         "smm trends content strategy",
         "marketing career growth tips",
     ],
     "финансы": [
-        "personal finance career salary 2025",
+        "personal finance career salary 2026",
         "finance professional linkedin",
         "financial analyst career growth",
     ],
     "карьера": [
-        "personal brand career growth 2025",
+        "personal brand career growth 2026",
         "linkedin profile optimization salary",
         "how to get promoted faster",
         "salary negotiation tips 2025",
     ],
     "общее": [
-        "personal branding tips 2025",
+        "personal branding tips 2026",
         "productivity career growth",
         "professional self promotion",
     ],

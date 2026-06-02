@@ -1,107 +1,27 @@
 {
-  "exported_at": "2026-05-21T20:55:12.855845",
+  "exported_at": "2026-06-02T21:07:39.905021",
   "niche": "it",
-  "count": 10,
+  "count": 2,
   "trends": [
     {
-      "id": 80,
+      "id": 1,
       "source": "it",
       "topic": "How to Be So Productive it Feels ILLEGAL",
-      "keywords": "[\"work\", \"your\", \"self\", \"career\", \"yourself\", \"promotion\", \"self-promotion\", \"productivity\"]",
-      "posts_count": 42,
-      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 42 постов, ключевые слова: work, your, self, career",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.200335"
-    },
-    {
-      "id": 70,
-      "source": "it",
-      "topic": "How to Be So Productive it Feels ILLEGAL",
-      "keywords": "[\"standard engagement\", \"format standard\", \"long-form engagement\", \"work format\", \"career advice\", \"format long-form\", \"personal branding\", \"andrew huberman\"]",
-      "posts_count": 40,
-      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 40 постов, ключевые слова: standard engagement, format standard, long-form engagement, work format",
-      "collected_at": "2026-05-09 10:38:53",
-      "expires_at": "2026-05-23T16:38:53.655916"
-    },
-    {
-      "id": 85,
-      "source": "it",
-      "topic": "How To Make Time For EVERYTHING | productivity & discipline",
-      "keywords": "[\"your\", \"reading\", \"continue\", \"medium\", \"life\", \"time\", \"x2019\", \"productivity\"]",
-      "posts_count": 37,
-      "summary": "Тема 'How To Make Time For EVERYTHING | produc...' — 37 постов, ключевые слова: your, reading, continue, medium",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.269826"
-    },
-    {
-      "id": 90,
-      "source": "it",
-      "topic": "How to Be So Productive it Feels ILLEGAL",
-      "keywords": "[\"personal productivity\", \"standard engagement\", \"format standard\", \"ted talks\", \"productivity personal\", \"work career\", \"work format\", \"long-form engagement\"]",
+      "keywords": "[\"standard engagement\", \"format standard\", \"career success\", \"promoted fast\", \"work format\", \"work career\", \"work visibility\", \"andrew huberman\"]",
       "posts_count": 35,
-      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 35 постов, ключевые слова: personal productivity, standard engagement, format standard, ted talks",
-      "collected_at": "2026-05-21 14:54:33",
-      "expires_at": "2026-06-04T20:54:33.102563"
+      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 35 постов, ключевые слова: standard engagement, format standard, career success, promoted fast",
+      "collected_at": "2026-06-02 15:07:08",
+      "expires_at": "2026-06-16T21:07:08.430921"
     },
     {
-      "id": 74,
+      "id": 3,
       "source": "it",
-      "topic": "Maximize Productivity, Physical & Mental Health With Daily Tools | Huberman Lab ",
-      "keywords": "[\"andrew huberman\", \"cal newport\", \"huberman lab\", \"make time\", \"lab podcast\", \"lab andrew\", \"podcast huberman\", \"huberman podcast\"]",
-      "posts_count": 17,
-      "summary": "Тема 'Maximize Productivity, Physical & Mental...' — 17 постов, ключевые слова: andrew huberman, cal newport, huberman lab, make time",
-      "collected_at": "2026-05-10 11:28:52",
-      "expires_at": "2026-05-24T17:28:52.338103"
-    },
-    {
-      "id": 88,
-      "source": "it",
-      "topic": "I Started Running Every Day. Here’s What Nobody Told Me It Would Do to My Mind.",
-      "keywords": "[\"continue\", \"reading\", \"medium\", \"that\", \"every\", \"here\", \"next\", \"everything\"]",
-      "posts_count": 14,
-      "summary": "Тема 'I Started Running Every Day. Here’s What...' — 14 постов, ключевые слова: continue, reading, medium, that",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.304968"
-    },
-    {
-      "id": 86,
-      "source": "it",
-      "topic": "how to use CHATGPT to level up your life | self growth, success & productivity h",
-      "keywords": "[\"chatgpt\", \"your\", \"self\", \"productivity\", \"growth\", \"skills\", \"life\", \"building\"]",
-      "posts_count": 13,
-      "summary": "Тема 'how to use CHATGPT to level up your life...' — 13 постов, ключевые слова: chatgpt, your, self, productivity",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.281777"
-    },
-    {
-      "id": 73,
-      "source": "it",
-      "topic": "How to Be So Productive it Feels ILLEGAL",
-      "keywords": "[\"increase productivity\", \"dream life\", \"stay organized\", \"standard engagement\", \"format standard\", \"life living\", \"productivity career\", \"life lessons\"]",
-      "posts_count": 12,
-      "summary": "Тема 'How to Be So Productive it Feels ILLEGAL...' — 12 постов, ключевые слова: increase productivity, dream life, stay organized, standard engagement",
-      "collected_at": "2026-05-10 11:28:52",
-      "expires_at": "2026-05-24T17:28:52.261592"
-    },
-    {
-      "id": 81,
-      "source": "it",
-      "topic": "The No.1 Productivity Expert: 10,000 Hours Is A Lie! This Morning Habit Is Ruini",
-      "keywords": "[\"life\", \"success\", \"what\", \"personal\", \"your\", \"that\", \"audiobook\", \"purpose\"]",
-      "posts_count": 10,
-      "summary": "Тема 'The No.1 Productivity Expert: 10,000 Hou...' — 10 постов, ключевые слова: life, success, what, personal",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.214380"
-    },
-    {
-      "id": 87,
-      "source": "it",
-      "topic": "[it] Как я поднял зарплату на 40% за 6 месяцев через LinkedIn",
-      "keywords": "[\"linkedin\", \"manage\", \"multiple\", \"accounts\", \"2026\", \"поднял\", \"зарплату\", \"месяцев\"]",
-      "posts_count": 5,
-      "summary": "Тема '[it] Как я поднял зарплату на 40% за 6 м...' — 5 постов, ключевые слова: linkedin, manage, multiple, accounts",
-      "collected_at": "2026-05-13 08:07:33",
-      "expires_at": "2026-05-27T13:07:33.293585"
+      "topic": "IYKYK",
+      "keywords": "[\"continue reading\", \"reading\", \"writers continue\", \"torn continue\", \"writing habits\", \"smarter habits\", \"habits smarter\", \"smarter writers\"]",
+      "posts_count": 20,
+      "summary": "Тема 'IYKYK...' — 20 постов, ключевые слова: continue reading, reading, writers continue, torn continue",
+      "collected_at": "2026-06-02 15:07:08",
+      "expires_at": "2026-06-16T21:07:08.667842"
     }
   ],
   "youtube_insights": {}
